@@ -199,3 +199,27 @@ def test_server_errors_from_the_service_become_the_busy_message(monkeypatch):
     with pytest.raises(AI.AIError) as e:
         AI._httpx_post("https://example.invalid/x", {}, {}, 1)
     assert e.value.status == 503 and "busy right now" in str(e.value)
+
+
+def test_a_timeout_counts_as_busy_and_the_overall_time_limit_stops_the_attempts():
+    import httpx
+    with pytest.raises(AI.AIError) as e:
+        import types
+        orig = httpx.post
+        httpx.post = lambda *a, **k: (_ for _ in ()).throw(httpx.ReadTimeout("slow"))
+        try:
+            AI._httpx_post("https://example.invalid/x", {}, {}, 1)
+        finally:
+            httpx.post = orig
+    assert e.value.status == 503 and "too long" in str(e.value)
+    clock = iter([0.0, 0.0, 1.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0])             # the first attempt "takes" past the 90 s limit
+    f = Fake(AI.AIError("slow", status=503), {"summary": "never reached"})
+    import modules.ai_assist as mod
+    real = mod.time.monotonic
+    mod.time.monotonic = lambda: next(clock)
+    try:
+        c = AI.GeminiClient("k", post=f, model="gemini-3-flash", sleep=lambda s: None, get=lambda *a: models_listing(("gemini-2-flash", ["generateContent"])))
+        out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    finally:
+        mod.time.monotonic = real
+    assert out["ok"] is False and "busy right now" in out["error"] and len(f.calls) == 1

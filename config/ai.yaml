@@ -2,7 +2,8 @@
 # Without a key every AI feature is simply off and the rest of the system works as before.
 model: gemini-2.5-flash          # override with GEMINI_MODEL; check the current model names in Google AI Studio
 endpoint: https://generativelanguage.googleapis.com/v1beta
-timeout_s: 30
+timeout_s: 45                    # per call to Google
+deadline_s: 90                   # no new attempt or model after this many seconds in total (the web proxy waits 180)
 temperature: 0.2
 max_findings: 40                 # findings sent per explanation
 max_evidence_chars: 500          # per finding
