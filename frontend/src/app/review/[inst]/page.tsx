@@ -1,7 +1,7 @@
 "use client";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, EyeOff, Gavel, GitCompare, Loader2, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Download, EyeOff, Gavel, GitCompare, Loader2, ShieldAlert, TriangleAlert } from "lucide-react";
 import { api, ApiError, blob, DOC_LABEL, jsonBody, type AiCaseExplanation, type CaseDoc, type Finding, type PageSize, type ReviewerCase, type SupervisorCase } from "@/lib/api";
 import { errorText, useRequireRole } from "@/lib/auth";
 import { PageViewer, type Box } from "@/components/PageViewer";
@@ -286,8 +286,22 @@ function DecisionPanel({ inst, rc, onDone }: { inst: string; rc: ReviewerCase; o
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const goBack = useRef<HTMLButtonElement>(null);
   const decided = rc.your_decision !== null;
   const open = !decided && (rc.phase === "blind" || rc.phase === "awaiting_third");
+
+  // What the "are you sure" box may say: the problems the checks found (findings visible to this reviewer; for a blind reviewer these carry no score).
+  const docLabel = (docId: string) => { const d = rc.documents.find((x) => x.doc_id === docId); return d ? (DOC_LABEL[d.doc_type] ?? d.doc_type) : "Across the documents"; };
+  const faults = rc.findings.filter((f) => f.id !== "rule_not_evaluable");
+  const unchecked = rc.findings.length - faults.length;                    // checks that could not be run for lack of data: not a fault, but worth knowing
+  const hasIssues = faults.length > 0 || unchecked > 0;
+
+  function submit() {
+    if (choice === "approve") { dialog.current?.showModal(); goBack.current?.focus(); }   // approving always asks first (focus on the safe button); other decisions go straight through
+    else void send();
+  }
+  function confirmApprove() { dialog.current?.close(); void send(); }
 
   async function send() {
     setBusy(true); setError(null);
@@ -319,8 +333,32 @@ function DecisionPanel({ inst, rc, onDone }: { inst: string; rc: ReviewerCase; o
       <label className="label mt-3" htmlFor="notes">Notes (kept in the audit trail)</label>
       <textarea id="notes" className="input min-h-24" value={notes} onChange={(e) => setNotes(e.target.value)} />
       {error && <p role="alert" className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      <button className="btn-primary mt-3" disabled={!choice || busy} onClick={send}>{busy && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />} Submit decision</button>
+      <button className="btn-primary mt-3" disabled={!choice || busy} onClick={submit}>{busy && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />} Submit decision</button>
       <p className="mt-2 text-xs text-ink-faint">A decision cannot be changed once submitted.</p>
+
+      <dialog ref={dialog} aria-labelledby="confirm-h" className="w-[min(34rem,calc(100vw-2rem))] rounded-xl bg-white p-0 text-ink shadow-xl backdrop:bg-black/40">
+        <div className="space-y-3 p-5">
+          <h2 id="confirm-h" className="text-lg font-semibold">Are you sure you want to approve this application?</h2>
+          {hasIssues && (
+            <div className="space-y-2" role="alert">
+              {faults.length > 0 && (
+                <>
+                  <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><TriangleAlert aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+                    The checks found {faults.length} problem{faults.length > 1 ? "s" : ""} with this application. Please read {faults.length > 1 ? "them" : "it"} before you approve:</p>
+                  <ul className="max-h-60 list-disc space-y-1 overflow-auto pl-5 text-sm">
+                    {faults.map((f, i) => <li key={`${f.id}${i}`}><strong>{docLabel(f.doc_id)}:</strong> {f.message}</li>)}
+                  </ul>
+                </>
+              )}
+              {unchecked > 0 && <p className="text-sm text-ink-soft">{unchecked} check{unchecked > 1 ? "s" : ""} could not be run because the information was missing.</p>}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button ref={goBack} className="btn-secondary" onClick={() => dialog.current?.close()}>Go back</button>
+            <button className={hasIssues ? "btn-danger" : "btn-primary"} onClick={confirmApprove}>{hasIssues ? "Approve anyway" : "Yes, approve"}</button>
+          </div>
+        </div>
+      </dialog>
     </section>
   );
 }
