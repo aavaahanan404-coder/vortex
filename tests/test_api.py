@@ -383,7 +383,7 @@ def ai_client(*answers):
 def test_ai_is_off_without_a_key_and_nothing_else_changes(tmp_path):
     cl, inst, _ = forged_case(tmp_path)
     for who in ("adm", "sup", "rev-ana"):
-        assert cl.get("/ai/status", headers=H(who)).json() == {"enabled": False, "model": None, "service": "Google Gemini"}
+        assert cl.get("/ai/status", headers=H(who)).json() == {"enabled": False, "model": None, "service": None}
     assert cl.get("/ai/status", headers=H(f"app-{inst['inst_id']}")).status_code == 403
     assert cl.post(f"/review/cases/{inst['inst_id']}/ai-explain", headers=H("sup")).status_code == 503
     assert cl.post("/admin/rules/ai-upload", headers=H("adm"), files={"file": ("r.pdf", b"%PDF-1.4")}).status_code == 503

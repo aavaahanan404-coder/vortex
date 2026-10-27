@@ -55,7 +55,7 @@ class Settings:
     rng_seed: int = 26261
     doc_types: list = field(default_factory=list)
     clock: Callable[[], str] = _now
-    ai: object = "env"            # "env" = Gemini client from GEMINI_API_KEY (or off without it); None = off; or an injected client (tests)
+    ai: object = "env"            # "env" = the provider chosen by the environment (GROQ_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY, or off without a key); None = off; or an injected client (tests)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -472,17 +472,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return {"intact": ok, "first_bad_seq": bad, "entries": n}
 
     # ------------------------------------------------------------------ AI assistant (optional, off without a key)
-    ai = AI.GeminiClient.from_env() if st.ai == "env" else st.ai
+    ai = AI.client_from_env() if st.ai == "env" else st.ai
     ai_cache: dict = {}
 
     def need_ai():
         if ai is None:
-            raise HTTPException(503, "AI help is not set up on this server (no GEMINI_API_KEY)")
+            raise HTTPException(503, "AI help is not set up on this server (no AI API key)")
         return ai
 
     @app.get("/ai/status")
     def ai_status(p: dict = Depends(need("reviewer", "supervisor", "admin"))):
-        return {"enabled": ai is not None, "model": getattr(ai, "model", None), "service": "Google Gemini"}
+        return {"enabled": ai is not None, "model": getattr(ai, "model", None), "service": getattr(ai, "service", None)}
 
     @app.post("/review/cases/{inst}/ai-explain")
     def ai_explain(inst: str, p: dict = Depends(staff)):
@@ -501,7 +501,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         store.log({"event": "ai_used", "feature": "explain_case", "inst_id": inst, "blind": blind, "model": client.model, "ok": out["ok"], "by": p["user"], "at": st.clock()})
         if not out["ok"]:
             raise HTTPException(502, out["error"])
-        ai_cache[key] = {**out, "service": "Google Gemini", "blind": blind}
+        ai_cache[key] = {**out, "service": client.service, "blind": blind}
         return ai_cache[key]
 
     # ------------------------------------------------------------------ /admin/rules (rule changer)
@@ -573,7 +573,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(422, got["error"])
         plan = RI.build_plan(got["parsed"], base_rb, base_nd, rstore.current(), {"name": Path(file.filename or "rules.pdf").name, "sha256": hashlib.sha256(raw).hexdigest(), "ai": True})
         plan["ai"], plan["ai_notes"] = True, got["notes"]
-        plan["warnings"].insert(0, "These changes were read from the document by an AI model (Google Gemini). Check every value against the quoted sentence before applying.")
+        plan["warnings"].insert(0, f"These changes were read from the document by an AI model ({client.service}). Check every value against the quoted sentence before applying.")
         plan["needs_ack"].append({"label": "Every change in this list", "why": "was read from the document by an AI model, so it needs your check against the quoted source"})
         return stage_preview(plan, raw, p)
 
@@ -587,7 +587,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         store.log({"event": "ai_used", "feature": "explain_rule_changes", "model": client.model, "ok": out["ok"], "by": p["user"], "at": st.clock()})
         if not out["ok"]:
             raise HTTPException(502, out["error"])
-        return {**out, "service": "Google Gemini"}
+        return {**out, "service": client.service}
 
     @app.post("/admin/rules/apply")
     def rules_apply(body: RuleApplyIn, p: dict = Depends(admin)):

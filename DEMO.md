@@ -67,18 +67,25 @@ Things to know:
 - The free plan has 512 MB of memory. If Render reports the service was killed for memory (reading scanned pages uses the most), change `plan: free` to `plan: starter` in `render.yaml` (a paid plan) and redeploy.
 - The image has not been built on the development computer (no Docker there); its parts were tested separately: the pinned dependencies in a clean environment, seeding, start-up from baked data, the zip and hub, and the web-server command. If the first Render build fails, send me the build log.
 
-## AI help (Google Gemini) - optional
-With a Gemini API key the system can: (1) **explain a case's anomalies** in plain words, with a short note under each finding (button "Explain these anomalies" on a case page, for supervisors and reviewers); (2) **explain a rule-change preview** ("Explain these changes in plain words"); (3) **read a prose rule document** that the table reader refuses ("Read it with AI"), turning it into the same preview, now with the document's quoted sentence beside each change and a "Show the resulting rule settings as YAML" view. Without a key all of this is simply hidden and nothing else changes.
+## AI help - optional (Groq, OpenRouter or Google Gemini)
+With an AI key the system can: (1) **explain a case's anomalies** in plain words, with a short note under each finding (button "Explain these anomalies" on a case page, for supervisors and reviewers); (2) **explain a rule-change preview** ("Explain these changes in plain words"); (3) **read a prose rule document** that the table reader refuses ("Read it with AI"), turning it into the same preview, with the document's quoted sentence beside each change and a "Show the resulting rule settings as YAML" view. Without a key all of this is hidden and nothing else changes.
 
-**Set the key** (get one in Google AI Studio; never paste it into chat, a file in git, or the hub page):
-- On this computer: copy `.env.example` to `.env` (git ignores it), put the key after `GEMINI_API_KEY=`, then start with `start_demo.bat`. The window says "AI help: on".
-- On Render: Dashboard, the service, Environment, add `GEMINI_API_KEY`. Optional `GEMINI_MODEL` changes the model (default `gemini-2.5-flash`, set in `config/ai.yaml`).
+**Pick a free provider and get a key** (never paste it into chat, a file in git, or the hub page):
+| Provider | Where to get a free key | Notes |
+|---|---|---|
+| **Groq** (recommended) | https://console.groq.com/keys | fast open models (Llama, gpt-oss); text only; small free token limits, so long rule documents are cut to 14,000 characters |
+| OpenRouter | https://openrouter.ai/keys | only models ending in `:free` are ever used, so nothing can be billed; free models can be slow or busy |
+| Google Gemini | https://aistudio.google.com/apikey | the only one that can read a **scanned** rule PDF; free quota may be zero for some keys |
+
+**Set the key**
+- On this computer: copy `.env.example` to `.env` (git ignores it), put the key after the matching name (`GROQ_API_KEY=` etc.), then start with `start_demo.bat`. The window says "AI help: on".
+- On Render: Dashboard, the service, Environment, add the variable (`GROQ_API_KEY`, `OPENROUTER_API_KEY` or `GEMINI_API_KEY`) and save; the service restarts. If several keys are set, Groq is used first, then OpenRouter, then Gemini; `AI_PROVIDER=groq|openrouter|gemini` forces one, `AI_MODEL` overrides the model.
 
 **Rules it follows**
 - It explains and proposes; it never decides, and it cannot apply anything. An AI-read rule document goes through the same checks as a table, shows every change with the quoted sentence, and **always needs the ticked confirmation**. It cannot set the "validated" flag or add rules, norms or programme types.
 - **A blind reviewer's explanation is written without the machine's score, probabilities or hard/soft labels**, and is shown no score.
-- What is sent to Google: finding messages and trimmed evidence (case explanations), the change list (plan explanations), or the rule document itself (AI import). Never an applicant's uploaded documents, names or tokens. Use only sample data unless your organisation has approved sending this to Google.
-- Each use is written to the audit log (who, what feature, which model; not the content). Answers for a case are kept in memory so repeated clicks do not call Google again.
+- What is sent to the provider: finding messages and trimmed evidence (case explanations), the change list (plan explanations), or the rule document's text (AI import). Never an applicant's uploaded documents, names or tokens. Use only sample data unless your organisation has approved sending this to that provider; free tiers may log prompts, so read the provider's terms.
+- Each use is written to the audit log (who, what feature, which model; not the content). Answers for a case are kept in memory so repeated clicks do not call the provider again. A usage-limit answer is never retried and pauses AI calls for a minute.
 - Each answer carries the line "Written by an AI model ... can be wrong ... does not decide anything".
 
 ## If something goes wrong

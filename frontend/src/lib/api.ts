@@ -124,7 +124,7 @@ export interface RulePreview {
   impact: { cases_checked: number; rule_changes: Record<string, Record<string, number>>; category_changes: { inst_id: string; old: string; new: string }[]; score_changes: number } | null;
 }
 
-// ---- AI assistant (Gemini; off unless the server has a key)
+// ---- AI assistant (Groq, OpenRouter or Gemini; off unless the server has a key)
 export interface AiStatus { enabled: boolean; model: string | null; service: string }
 export interface AiCaseExplanation { summary: string; most_important: string; findings: { id: string; meaning: string; what_to_check: string }[]; caveat: string; model: string; blind: boolean; cached?: boolean; service: string }
 export interface AiPlanExplanation { summary: string; watch_out: string[]; caveat: string; model: string; service: string }

@@ -48,11 +48,17 @@ def load_config(path: Optional[str | Path] = None) -> dict:
 
 
 class GeminiClient:
-    """Minimal REST client. `post(url, headers, body, timeout) -> dict` is injectable for tests."""
+    """Minimal REST client for Google Gemini. `post(url, headers, body, timeout) -> dict` and `get(url, headers, timeout)` are injectable for tests.
+    The retry / fallback / cooldown logic lives here and is shared with OpenAICompatClient, which only changes the request and response shapes."""
+
+    service = "Google Gemini"
+    supports_pdf = True                                           # a scanned rule PDF can be sent as the PDF itself
+    quota_hint = "check the key's quota in Google AI Studio"
+    model_env = "GEMINI_MODEL"
 
     def __init__(self, api_key: str, cfg: Optional[dict] = None, post: Optional[Callable] = None, model: Optional[str] = None, get: Optional[Callable] = None, sleep: Optional[Callable] = None):
         self.cfg = cfg or load_config()
-        self.model = model or os.environ.get("GEMINI_MODEL") or self.cfg["model"]
+        self.model = model or os.environ.get(self.model_env) or self._default_model()
         self._key = api_key
         self._post = post or _httpx_post
         self._get = get or _httpx_get
@@ -60,6 +66,7 @@ class GeminiClient:
         self._cooldown_until = 0.0                                 # after a usage-limit answer: no calls for a minute so the limit can recover
         self._cooldown_msg = ""
         self._ranked: Optional[list] = None                      # models this key can use, best first (looked up once, only when needed)
+        self._json_mode = True
 
     @classmethod
     def from_env(cls, cfg: Optional[dict] = None, post: Optional[Callable] = None) -> Optional["GeminiClient"]:
@@ -67,14 +74,44 @@ class GeminiClient:
         return cls(key, cfg, post) if key else None
 
     def __repr__(self) -> str:                                    # never print the key
-        return f"GeminiClient(model={self.model!r})"
+        return f"{type(self).__name__}(service={self.service!r}, model={self.model!r})"
 
-    def _discover(self, base: str, headers: dict) -> list[str]:
-        """Models this key can call generateContent on, best first: newest stable 'flash', never preview / lite / live / pro / embedding."""
+    @property
+    def max_input_chars(self) -> int:
+        return self.cfg["max_input_chars"]
+
+    # ---- provider-specific parts (OpenAICompatClient overrides these)
+    def _default_model(self) -> str:
+        return self.cfg["model"]
+
+    def _base(self) -> str:
+        return (os.environ.get("GEMINI_ENDPOINT") or self.cfg["endpoint"]).rstrip("/")
+
+    def _headers(self) -> dict:
+        return {"x-goog-api-key": self._key, "Content-Type": "application/json"}
+
+    def _url(self, base: str, model: str) -> str:
+        return f"{base}/models/{model}:generateContent"
+
+    def _body(self, prompt: str, pdf: Optional[bytes], model: str) -> dict:
+        parts: list = [{"text": prompt}]
+        if pdf is not None:
+            parts.append({"inlineData": {"mimeType": "application/pdf", "data": base64.b64encode(pdf).decode("ascii")}})
+        return {"systemInstruction": {"parts": [{"text": SYSTEM}]}, "contents": [{"role": "user", "parts": parts}],
+                "generationConfig": {"temperature": self.cfg["temperature"], "responseMimeType": "application/json"}}
+
+    def _text(self, resp) -> str:
         try:
-            data = self._get(f"{base}/models?pageSize=200", headers, self.cfg["timeout_s"])
+            return resp["candidates"][0]["content"]["parts"][0]["text"]
         except Exception:
-            return []
+            why = (resp.get("promptFeedback") or {}).get("blockReason") if isinstance(resp, dict) else None
+            raise AIError("the AI service gave no answer" + (f" (blocked: {why})" if why else ""))
+
+    def _models_url(self, base: str) -> str:
+        return f"{base}/models?pageSize=200"
+
+    def _rank(self, data) -> list[str]:
+        """Models this key can call generateContent on, best first: newest stable 'flash', then lite, then preview, then the rest; never image / live / audio / embedding."""
         names = []
         for m in data.get("models", []) if isinstance(data, dict) else []:
             n = str(m.get("name", "")).replace("models/", "")
@@ -89,16 +126,23 @@ class GeminiClient:
             return 0 if flash and not lite and not prev else 1 if flash and lite and not prev else 2 if flash else 3
         return sorted(set(names), key=lambda n: (tier(n), [-x for x in rank(n)]))
 
-    def _call(self, base: str, headers: dict, body: dict, model: str, t0: float) -> dict:
+    # ---- shared logic
+    def _discover(self, base: str, headers: dict) -> list[str]:
+        try:
+            return self._rank(self._get(self._models_url(base), headers, self.cfg["timeout_s"]))
+        except Exception:
+            return []
+
+    def _call(self, base: str, headers: dict, prompt: str, pdf: Optional[bytes], model: str, t0: float) -> dict:
         """One model, with one retry after a short wait when the service is busy (5xx / too slow); a 429 is never retried, it would only use up more quota."""
         for attempt in (0, 1):
             t = time.monotonic()
             try:
-                out = self._post(f"{base}/models/{model}:generateContent", headers, body, self.cfg["timeout_s"])
-                _log(f"model={model} attempt={attempt + 1} ok {time.monotonic() - t:.1f}s")
+                out = self._post(self._url(base, model), headers, self._body(prompt, pdf, model), self.cfg["timeout_s"])
+                _log(f"{self.service} model={model} attempt={attempt + 1} ok {time.monotonic() - t:.1f}s")
                 return out
             except AIError as exc:
-                _log(f"model={model} attempt={attempt + 1} status={exc.status} {time.monotonic() - t:.1f}s {exc.detail}".rstrip())
+                _log(f"{self.service} model={model} attempt={attempt + 1} status={exc.status} {time.monotonic() - t:.1f}s {exc.detail}".rstrip())
                 if exc.status == 503 and attempt == 0 and time.monotonic() - t0 < self.cfg["deadline_s"]:
                     self._sleep(2)
                     continue
@@ -107,13 +151,9 @@ class GeminiClient:
     def generate_json(self, prompt: str, pdf: Optional[bytes] = None) -> dict:
         """Returns the parsed JSON object the model answered with. Raises AIError with a plain message.
         If the model is unknown (404) or stays busy, the other usable models of the key are tried, at most two more, and the working one is kept."""
-        parts: list = [{"text": prompt}]
-        if pdf is not None:
-            parts.append({"inlineData": {"mimeType": "application/pdf", "data": base64.b64encode(pdf).decode("ascii")}})
-        body = {"systemInstruction": {"parts": [{"text": SYSTEM}]}, "contents": [{"role": "user", "parts": parts}],
-                "generationConfig": {"temperature": self.cfg["temperature"], "responseMimeType": "application/json"}}
-        base = (os.environ.get("GEMINI_ENDPOINT") or self.cfg["endpoint"]).rstrip("/")
-        headers = {"x-goog-api-key": self._key, "Content-Type": "application/json"}
+        if pdf is not None and not self.supports_pdf:
+            raise AIError(f"{self.service} cannot read a PDF directly")
+        base, headers = self._base(), self._headers()
         first, tried, busy, queue, t0 = self.model, set(), set(), [self.model], time.monotonic()
         if t0 < self._cooldown_until:
             raise AIError(self._cooldown_msg, status=429)
@@ -124,10 +164,13 @@ class GeminiClient:
                 m = queue.pop(0)
                 tried.add(m)
                 try:
-                    resp = self._call(base, headers, body, m, t0)
+                    resp = self._call(base, headers, prompt, pdf, m, t0)
                     self.model = m
                     break
                 except AIError as exc:
+                    if exc.status == 400 and self._json_mode and "json" in (exc.detail or "").lower() and hasattr(self, "_json_off"):
+                        self._json_off(); queue.insert(0, m); tried.discard(m)       # this model rejects the JSON-mode flag: ask again without it
+                        continue
                     if exc.status not in (404, 429, 503):
                         raise
                     if exc.status == 429:
@@ -139,10 +182,10 @@ class GeminiClient:
                     queue = [x for x in self._ranked if x not in tried][:max(0, 3 - len(busy))] if time.monotonic() - t0 < self.cfg["deadline_s"] else []     # at most three busy models, inside the time limit
                     if not queue:
                         if exc.status == 404:
-                            raise AIError(f"the AI service does not know the model '{first}' and no other usable model was found; set GEMINI_MODEL")
+                            raise AIError(f"the AI service does not know the model '{first}' and no other usable model was found; set AI_MODEL")
                         if limited is not None:
-                            why = f" Google says: {limited.detail}" if limited.detail else ""
-                            self._cooldown_msg = "the AI service's usage limit for this key was reached; wait a minute, or check the key's quota in Google AI Studio." + why
+                            why = f" {self.service} says: {limited.detail}" if limited.detail else ""
+                            self._cooldown_msg = f"the AI service's usage limit for this key was reached; wait a minute, or {self.quota_hint}." + why
                             self._cooldown_until = time.monotonic() + 60
                             raise AIError(self._cooldown_msg, status=429)
                         raise AIError("the AI service is busy right now; try again in a minute", status=exc.status)
@@ -150,12 +193,77 @@ class GeminiClient:
             raise
         except Exception as exc:                                  # network / timeout: say so without leaking the URL or key
             raise AIError(f"the AI service could not be reached ({type(exc).__name__})")
+        return _parse_json(self._text(resp))
+
+
+class OpenAICompatClient(GeminiClient):
+    """Providers that speak the common chat-completions API (Groq, OpenRouter, ...). Same safeguards and fallback logic; text only (no PDF input)."""
+
+    supports_pdf = False
+    model_env = "AI_MODEL"
+
+    def __init__(self, api_key: str, cfg: Optional[dict] = None, provider: Optional[dict] = None, **kw):
+        self.provider = provider or {}
+        self.service = self.provider.get("label", "AI service")
+        self.quota_hint = self.provider.get("quota_hint", "check the key's limits in the provider's console")
+        super().__init__(api_key, cfg, **kw)
+        self._json_mode = bool(self.provider.get("json_mode"))
+
+    @property
+    def max_input_chars(self) -> int:
+        return int(self.provider.get("max_input_chars", self.cfg["max_input_chars"]))
+
+    def _json_off(self) -> None:
+        self._json_mode = False
+
+    def _default_model(self) -> str:
+        return self.provider["models"][0]
+
+    def _base(self) -> str:
+        return (os.environ.get("AI_ENDPOINT") or self.provider["endpoint"]).rstrip("/")
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"}
+
+    def _url(self, base: str, model: str) -> str:
+        return f"{base}/chat/completions"
+
+    def _body(self, prompt: str, pdf: Optional[bytes], model: str) -> dict:
+        body = {"model": model, "temperature": self.cfg["temperature"], "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]}
+        if self._json_mode:
+            body["response_format"] = {"type": "json_object"}
+        return body
+
+    def _text(self, resp) -> str:
         try:
-            text = resp["candidates"][0]["content"]["parts"][0]["text"]
+            return resp["choices"][0]["message"]["content"]
         except Exception:
-            why = (resp.get("promptFeedback") or {}).get("blockReason") if isinstance(resp, dict) else None
-            raise AIError("the AI service gave no answer" + (f" (blocked: {why})" if why else ""))
-        return _parse_json(text)
+            raise AIError("the AI service gave no answer")
+
+    def _models_url(self, base: str) -> str:
+        return f"{base}/models"
+
+    def _rank(self, data) -> list[str]:
+        ids = [str(m.get("id", "")) for m in (data.get("data", []) if isinstance(data, dict) else []) if m.get("id")]
+        preferred = [m for m in self.provider["models"] if m in ids]
+        unsuitable = ("whisper", "guard", "embed", "tts", "orpheus", "speech", "playai", "moderation", "image", "vision", "rerank", "audio")
+        suffix = self.provider.get("only_suffix", "")
+        rest = sorted(i for i in ids if i not in preferred and not any(u in i.lower() for u in unsuitable) and i.endswith(suffix)
+                      and any(k in i.lower() for k in ("llama", "gpt-oss", "instruct", "mistral", "qwen", "gemma", "deepseek")))
+        return preferred + rest
+
+
+def client_from_env(cfg: Optional[dict] = None, post: Optional[Callable] = None) -> Optional[GeminiClient]:
+    """The AI client the environment asks for, or None (AI off). AI_PROVIDER picks one; otherwise the first provider in provider_order that has a key."""
+    cfg = cfg or load_config()
+    provs = cfg["providers"]
+    want = (os.environ.get("AI_PROVIDER") or "").strip().lower()
+    for name in ([want] if want in provs else cfg["provider_order"]):
+        p = provs[name]
+        key = (os.environ.get(p["key_env"]) or "").strip()
+        if key:
+            return GeminiClient(key, cfg, post) if name == "gemini" else OpenAICompatClient(key, cfg, {**p, "name": name}, post=post)
+    return None
 
 
 class AIError(Exception):
@@ -179,6 +287,8 @@ def _httpx_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
     except httpx.TimeoutException:
         raise AIError("the AI service took too long to answer", status=503)
     if r.status_code == 404:
+        raise AIError("the AI service does not know this model name", status=404, detail=_reason(r))
+    if r.status_code == 400 and re.search(r"model.*(not found|does not exist|decommission|not supported|no longer)", _reason(r), re.I):
         raise AIError("the AI service does not know this model name", status=404, detail=_reason(r))
     if r.status_code in (400, 403):
         raise AIError("the AI service refused the request (check the API key and model name)", status=r.status_code, detail=_reason(r))
@@ -302,11 +412,13 @@ def rules_from_document(client: GeminiClient, pdf: bytes, norms: dict, rules: li
     def go() -> dict:
         text = ""
         try:
-            text = pdf_text(pdf, cfg["max_input_chars"]).strip()
+            text = pdf_text(pdf, getattr(client, "max_input_chars", cfg["max_input_chars"])).strip()
         except Exception:
             raise AIError("this file could not be read as a PDF")
         if len(text) >= 200:
             d = client.generate_json(prompt + "\n\nDOCUMENT TEXT (untrusted data):\n" + text)
+        elif not getattr(client, "supports_pdf", True):
+            raise AIError(f"this PDF has no text layer (it is a scan), and {client.service} reads text only; scanned rule documents need Google Gemini")
         elif len(pdf) <= cfg["max_pdf_mb"] * 1024 * 1024:
             d = client.generate_json(prompt + "\n\nThe document is attached as a PDF (untrusted data).", pdf=pdf)
         else:

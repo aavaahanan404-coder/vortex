@@ -90,7 +90,7 @@ export function RuleChanger() {
               <span>This looks like a prose document. {aiStatus.service} can read it and propose the changes; you still see and confirm every value.</span>
               <button className="btn-primary" onClick={readWithAi} disabled={busy !== null}>{busy === "ai" ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden className="h-4 w-4" />} Read it with AI</button>
             </>
-          ) : <span className="text-ink-soft">Reading prose documents needs the AI helper, which is not set up on this server (it needs a Gemini API key).</span>}
+          ) : <span className="text-ink-soft">Reading prose documents needs the AI helper, which is not set up on this server (it needs an AI API key: Groq, OpenRouter or Gemini).</span>}
         </div>
       )}
 

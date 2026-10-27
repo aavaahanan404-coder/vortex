@@ -4,7 +4,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { api, type AiCaseExplanation, type AiStatus } from "@/lib/api";
 import { errorText } from "@/lib/auth";
 
-/** Optional AI help: a plain-words explanation of the anomalies of one case. Hidden unless the server has a Gemini key. The answer is
+/** Optional AI help: a plain-words explanation of the anomalies of one case. Hidden unless the server has an AI key. The answer is
  *  evidence-based text only; it never decides, and for a blind reviewer it is built without the machine's score. */
 export function AiExplain({ inst, blind, onResult }: { inst: string; blind: boolean; onResult: (r: AiCaseExplanation | null) => void }) {
   const [status, setStatus] = useState<AiStatus | null>(null);
@@ -29,7 +29,7 @@ export function AiExplain({ inst, blind, onResult }: { inst: string; blind: bool
           <button className="btn-secondary" onClick={run} disabled={busy}>{busy ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden className="h-4 w-4" />} {out ? "Explain again" : "Explain these anomalies"}</button>
         ) : <span className="pill bg-slate-100 text-ink-soft">not set up on this server</span>}
       </div>
-      {!status.enabled && <p className="text-sm text-ink-soft">The administrator can switch this on by giving the server a Gemini API key.</p>}
+      {!status.enabled && <p className="text-sm text-ink-soft">The administrator can switch this on by giving the server an AI API key (Groq, OpenRouter or Gemini).</p>}
       {status.enabled && !out && !error && (
         <p className="text-sm text-ink-soft">Asks {status.service} to explain the findings of this case in plain words. Only the finding messages and their evidence are sent, not the documents.{blind && " You are reviewing blind, so the explanation is written without the machine's score."}</p>
       )}

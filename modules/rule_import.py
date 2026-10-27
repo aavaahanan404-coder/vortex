@@ -118,7 +118,7 @@ def read_pdf(path: str | Path | bytes) -> dict:
         doc.close()
     if not norm_rows and not rule_rows:
         raise RuleImportError("no rule tables were found. This tool reads PDFs laid out as the template (a Norms table and/or a Rules table with "
-                              "their header rows). A prose or scanned handbook is an unstructured document: use \"Read it with AI\" in the rules tool (it needs the Gemini key to be set up).")
+                              "their header rows). A prose or scanned handbook is an unstructured document: use \"Read it with AI\" in the rules tool (it needs an AI API key to be set up).")
     return {"meta": meta, "norm_rows": norm_rows, "rule_rows": rule_rows}
 
 

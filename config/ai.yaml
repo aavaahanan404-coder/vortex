@@ -1,5 +1,6 @@
-# Gemini assistant settings. The API key is NEVER stored here: set the environment variable GEMINI_API_KEY (and optionally GEMINI_MODEL).
-# Without a key every AI feature is simply off and the rest of the system works as before.
+# AI assistant settings. API keys are NEVER stored here: set the environment variable of the provider you use (GROQ_API_KEY, OPENROUTER_API_KEY or GEMINI_API_KEY).
+# AI_PROVIDER=groq|openrouter|gemini picks one; without it the first provider in provider_order that has a key is used. Without any key every AI feature is
+# simply off and the rest of the system works as before. AI_MODEL (GEMINI_MODEL for Gemini) overrides the model. Check each provider's current free limits and terms.
 model: gemini-3.8-flash          # override with GEMINI_MODEL; check the current model names in Google AI Studio
 endpoint: https://generativelanguage.googleapis.com/v1beta
 timeout_s: 35                    # per call to Google
@@ -9,3 +10,26 @@ max_findings: 40                 # findings sent per explanation
 max_evidence_chars: 500          # per finding
 max_input_chars: 60000           # of a rule document's text
 max_pdf_mb: 8                    # a rule PDF with no text layer is sent as the PDF itself, up to this size
+
+provider_order: [groq, openrouter, gemini]
+providers:
+  gemini:
+    key_env: GEMINI_API_KEY
+    label: Google Gemini
+  groq:                              # free tier at the time of writing: console.groq.com/keys
+    key_env: GROQ_API_KEY
+    label: Groq
+    endpoint: https://api.groq.com/openai/v1
+    json_mode: true
+    max_input_chars: 14000           # free-tier token-per-minute limits are small; longer rule documents are cut
+    quota_hint: check the key's limits at console.groq.com
+    models: [llama-3.3-70b-versatile, openai/gpt-oss-120b, openai/gpt-oss-20b, llama-3.1-8b-instant]
+  openrouter:                        # only models whose name ends in :free are used, so nothing can be billed
+    key_env: OPENROUTER_API_KEY
+    label: OpenRouter
+    endpoint: https://openrouter.ai/api/v1
+    json_mode: false
+    only_suffix: ":free"
+    max_input_chars: 14000
+    quota_hint: check the key's limits at openrouter.ai/settings/keys
+    models: [meta-llama/llama-3.3-70b-instruct:free, openai/gpt-oss-120b:free, openai/gpt-oss-20b:free, google/gemma-3-27b-it:free]

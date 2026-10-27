@@ -23,7 +23,7 @@ class Fake:
         a = self.answers.pop(0)
         if isinstance(a, Exception):
             raise a
-        return a if "candidates" in a or "promptFeedback" in a else {"candidates": [{"content": {"parts": [{"text": json.dumps(a)}]}}]}
+        return a if "candidates" in a or "promptFeedback" in a or "choices" in a else {"candidates": [{"content": {"parts": [{"text": json.dumps(a)}]}}]}
 
 
 def client(*answers, key="SECRET-KEY-123"):
@@ -161,7 +161,7 @@ def test_discovery_gives_up_with_a_plain_message_when_nothing_usable_exists():
     f = Fake(AI.AIError("unknown model", status=404))
     c = AI.GeminiClient("k", post=f, model="gone-model", get=lambda *a: models_listing(("embedding-001", ["embedContent"])))
     out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
-    assert out["ok"] is False and "gone-model" in out["error"] and "GEMINI_MODEL" in out["error"] and len(f.calls) == 1
+    assert out["ok"] is False and "gone-model" in out["error"] and "AI_MODEL" in out["error"] and len(f.calls) == 1
     f2 = Fake(AI.AIError("unknown model", status=404), AI.AIError("unknown model", status=404))
     c2 = AI.GeminiClient("k", post=f2, model="a", get=lambda *a: models_listing(("gemini-3-flash", ["generateContent"])))
     assert AI.explain_case(c2, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False and len(f2.calls) == 2      # one retry only, never a loop
@@ -264,3 +264,99 @@ def test_googles_own_error_text_is_read_from_the_response_body(monkeypatch):
     with pytest.raises(AI.AIError) as e:
         AI._httpx_post("https://example.invalid/x", {"x-goog-api-key": "SECRET"}, {}, 1)
     assert e.value.status == 429 and e.value.detail == "You exceeded your current quota, please check your plan." and "SECRET" not in e.value.detail
+
+
+# ----------------------------------------------------------------------------- other providers (Groq, OpenRouter): same safeguards, chat-completions API
+def oa(obj) -> dict:
+    return {"choices": [{"message": {"content": json.dumps(obj)}}]}
+
+
+def groq(*answers, **kw):
+    f = Fake(*answers)
+    cfg = AI.load_config()
+    return AI.OpenAICompatClient("GROQ-SECRET-9", cfg, {**cfg["providers"]["groq"], "name": "groq"}, post=f, sleep=lambda s: None, **kw), f
+
+
+def test_the_provider_comes_from_the_environment(monkeypatch):
+    for k in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "AI_PROVIDER", "AI_MODEL", "GEMINI_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    assert AI.client_from_env() is None
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    assert type(AI.client_from_env()) is AI.GeminiClient
+    monkeypatch.setenv("GROQ_API_KEY", " k ")
+    c = AI.client_from_env()
+    assert isinstance(c, AI.OpenAICompatClient) and c.service == "Groq" and c.model == "llama-3.3-70b-versatile"        # first provider in the order that has a key
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    assert type(AI.client_from_env()) is AI.GeminiClient
+    monkeypatch.setenv("AI_PROVIDER", "openrouter")
+    assert AI.client_from_env() is None                                                                                 # asked for a provider that has no key: off, not a silent switch
+    monkeypatch.setenv("OPENROUTER_API_KEY", "o")
+    monkeypatch.setenv("AI_MODEL", "my/model:free")
+    o = AI.client_from_env()
+    assert o.service == "OpenRouter" and o.model == "my/model:free" and not o._json_mode
+
+
+def test_chat_completions_request_shape_and_key_safety():
+    c, f = groq(oa({"summary": "ok", "findings": []}))
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, {"score": 0.9}, [], False))
+    call = f.calls[0]
+    assert out["ok"] and call["url"].endswith("/openai/v1/chat/completions") and call["headers"]["Authorization"] == "Bearer GROQ-SECRET-9"
+    assert call["body"]["model"] == "llama-3.3-70b-versatile" and call["body"]["response_format"] == {"type": "json_object"}
+    assert [m["role"] for m in call["body"]["messages"]] == ["system", "user"] and "untrusted" in call["body"]["messages"][0]["content"]
+    assert "GROQ-SECRET-9" not in call["url"] + json.dumps(call["body"]) + repr(c) and "x-goog-api-key" not in call["headers"]
+
+
+def test_a_model_that_rejects_the_json_flag_is_asked_again_without_it():
+    c, f = groq(AI.AIError("bad", status=400, detail="response_format json_object is not supported with this model"), oa({"summary": "ok"}))
+    assert AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))["ok"]
+    assert "response_format" in f.calls[0]["body"] and "response_format" not in f.calls[1]["body"] and f.calls[0]["body"]["model"] == f.calls[1]["body"]["model"]
+
+
+def test_model_discovery_prefers_the_configured_models_and_openrouter_never_picks_a_paid_one():
+    c, _ = groq()
+    data = {"data": [{"id": "whisper-large-v3"}, {"id": "llama-guard-4"}, {"id": "openai/gpt-oss-20b"}, {"id": "llama-3.3-70b-versatile"}, {"id": "qwen/qwen3-32b"}]}
+    assert c._rank(data) == ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "qwen/qwen3-32b"]
+    cfg = AI.load_config()
+    o = AI.OpenAICompatClient("k", cfg, {**cfg["providers"]["openrouter"], "name": "openrouter"})
+    ids = {"data": [{"id": "meta-llama/llama-3.3-70b-instruct:free"}, {"id": "anthropic/some-paid-model"}, {"id": "mistralai/mistral-7b-instruct"},
+                    {"id": "qwen/qwen3-8b:free"}, {"id": "openai/whisper:free"}]}
+    assert o._rank(ids) == ["meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-8b:free"]
+
+
+def test_an_unknown_model_on_a_chat_provider_falls_back_through_the_models_endpoint():
+    f = Fake(AI.AIError("gone", status=404), oa({"summary": "ok"}))
+    cfg = AI.load_config()
+    c = AI.OpenAICompatClient("k", cfg, {**cfg["providers"]["groq"], "name": "groq"}, post=f, model="decommissioned", sleep=lambda s: None,
+                              get=lambda url, h, t: {"data": [{"id": "openai/gpt-oss-120b"}, {"id": "llama-3.1-8b-instant"}]})
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] and out["model"] == "openai/gpt-oss-120b"
+
+
+def test_a_model_not_found_400_is_treated_like_a_404(monkeypatch):
+    import types, httpx
+    body = {"error": {"message": "The model `llama3-70b-8192` has been decommissioned and is no longer supported."}}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: types.SimpleNamespace(status_code=400, json=lambda: body))
+    with pytest.raises(AI.AIError) as e:
+        AI._httpx_post("https://example.invalid/x", {}, {}, 1)
+    assert e.value.status == 404
+
+
+def test_the_quota_message_names_the_provider_and_a_chat_provider_never_receives_a_pdf():
+    lim = AI.AIError("limit", status=429, detail="Rate limit reached for model llama-3.3-70b-versatile: 30 requests per minute")
+    c, f = groq(lim, lim, lim)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] is False and "Groq says: Rate limit reached" in out["error"] and "console.groq.com" in out["error"] and len(f.calls) <= 3
+    c2, f2 = groq()
+    scan = AI.rules_from_document(c2, make_pdf(), ND["programme_types"], RB["rules"])
+    assert scan["ok"] is False and "scan" in scan["error"] and "Groq" in scan["error"] and f2.calls == []
+
+
+def test_a_long_rule_document_is_cut_to_the_providers_limit():
+    long_text = "Handbook. " + ("Institutions shall maintain adequate faculty in every programme. " * 400) + " one teacher for every eighteen students."
+    c, f = groq(oa({"norm_rows": [{"programme_type": "engineering", "norm": "students_per_faculty", "value": 18, "clause": "3", "quote": "q"}], "rule_rows": []}))
+    pdf = pymupdf.open()
+    for i in range(0, len(long_text), 3000):
+        pdf.new_page().insert_textbox(pymupdf.Rect(30, 30, 560, 800), long_text[i:i + 3000], fontsize=8)
+    got = AI.rules_from_document(c, pdf.tobytes(), ND["programme_types"], RB["rules"])
+    sent = f.calls[0]["body"]["messages"][1]["content"]
+    assert got["ok"] and len(sent.split("DOCUMENT TEXT (untrusted data):\n", 1)[1]) <= 14000 + 5
