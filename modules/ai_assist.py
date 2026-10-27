@@ -78,10 +78,14 @@ class GeminiClient:
             n = str(m.get("name", "")).replace("models/", "")
             if n.startswith("gemini") and "generateContent" in (m.get("supportedGenerationMethods") or []):
                 names.append(n)
-        bad = ("lite", "preview", "exp", "image", "tts", "live", "audio", "embedding", "thinking", "vision", "robotics", "computer", "customtools")
-        stable = [n for n in names if "flash" in n and not any(b in n for b in bad)] or [n for n in names if not any(b in n for b in bad)] or names
+        unsuitable = ("image", "tts", "live", "audio", "embedding", "vision", "robotics", "computer", "customtools", "thinking", "exp", "learnlm", "gemma")
+        names = [n for n in names if not any(u in n for u in unsuitable)]
         rank = lambda n: [int(x) for x in re.findall(r"\d+", n)]
-        return sorted(set(stable), key=rank, reverse=True)
+
+        def tier(n: str) -> int:                                  # 0 stable flash, 1 flash-lite, 2 preview flash, 3 anything else (pro, previews of pro)
+            flash, lite, prev = "flash" in n, "lite" in n, "preview" in n
+            return 0 if flash and not lite and not prev else 1 if flash and lite and not prev else 2 if flash else 3
+        return sorted(set(names), key=lambda n: (tier(n), [-x for x in rank(n)]))
 
     def _call(self, base: str, headers: dict, body: dict, model: str, t0: float) -> dict:
         """One model, with one retry after a short wait when the service says it is busy (429 / 5xx / too slow), inside the overall time limit."""
@@ -108,7 +112,7 @@ class GeminiClient:
                 "generationConfig": {"temperature": self.cfg["temperature"], "responseMimeType": "application/json"}}
         base = (os.environ.get("GEMINI_ENDPOINT") or self.cfg["endpoint"]).rstrip("/")
         headers = {"x-goog-api-key": self._key, "Content-Type": "application/json"}
-        first, tried, queue, t0 = self.model, set(), [self.model], time.monotonic()
+        first, tried, busy, queue, t0 = self.model, set(), set(), [self.model], time.monotonic()
         try:
             resp = None
             while queue:
@@ -121,9 +125,11 @@ class GeminiClient:
                 except AIError as exc:
                     if exc.status not in (404, 429, 503):
                         raise
+                    if exc.status != 404:
+                        busy.add(m)                                # a model that is unknown does not use up the fallback budget
                     if self._ranked is None:                          # the first problem: find out which models this key can use (once)
                         self._ranked = self._discover(base, headers)
-                    queue = [x for x in self._ranked if x not in tried][:max(0, 3 - len(tried))] if time.monotonic() - t0 < self.cfg["deadline_s"] else []     # at most three models, inside the time limit
+                    queue = [x for x in self._ranked if x not in tried][:max(0, 3 - len(busy))] if time.monotonic() - t0 < self.cfg["deadline_s"] else []     # at most three busy models, inside the time limit
                     if not queue:
                         if exc.status == 404:
                             raise AIError(f"the AI service does not know the model '{first}' and no other usable model was found; set GEMINI_MODEL")

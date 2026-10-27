@@ -223,3 +223,19 @@ def test_a_timeout_counts_as_busy_and_the_overall_time_limit_stops_the_attempts(
     finally:
         mod.time.monotonic = real
     assert out["ok"] is False and "busy right now" in out["error"] and len(f.calls) == 1
+
+
+def test_fallback_order_is_stable_flash_then_lite_then_preview_then_the_rest_and_unsuitable_models_never():
+    listing = models_listing(("gemini-3-flash", ["generateContent"]), ("gemini-3-flash-lite", ["generateContent"]), ("gemini-3-flash-preview", ["generateContent"]),
+                             ("gemini-2.5-flash", ["generateContent"]), ("gemini-3-pro", ["generateContent"]), ("gemini-3-flash-image", ["generateContent"]),
+                             ("gemini-3-flash-live", ["generateContent"]), ("gemma-3-27b", ["generateContent"]), ("gemini-embedding", ["embedContent"]))
+    c = AI.GeminiClient("k", get=lambda *a: listing)
+    assert c._discover("https://x", {}) == ["gemini-3-flash", "gemini-2.5-flash", "gemini-3-flash-lite", "gemini-3-flash-preview", "gemini-3-pro"]
+
+
+def test_a_single_overloaded_flash_falls_back_to_the_lite_model_and_an_unknown_first_model_costs_no_budget():
+    listing = models_listing(("gemini-3-flash", ["generateContent"]), ("gemini-3-flash-lite", ["generateContent"]))
+    f = Fake(AI.AIError("gone", status=404), AI.AIError("busy", status=503), AI.AIError("busy", status=503), {"summary": "ok on lite"})
+    c = AI.GeminiClient("k", post=f, model="old-model", sleep=lambda s: None, get=lambda *a: listing)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] and out["model"] == "gemini-3-flash-lite" and [x["url"].split("/models/")[1].split(":")[0] for x in f.calls] == ["old-model", "gemini-3-flash", "gemini-3-flash", "gemini-3-flash-lite"]
