@@ -1,0 +1,7 @@
+# never rewrite line endings of the corpora or of binaries (the corpora must stay byte-identical to what was shipped)
+corpus_v2/** -text
+corpus_test_v2/** -text
+*.pdf binary
+*.png binary
+*.jpg binary
+*.sqlite binary
