@@ -4,6 +4,8 @@ const API_URL = process.env.API_URL || "http://127.0.0.1:8000";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The default proxy gives up after 30 s; an AI request (model lookup, retry, fallback) can legitimately take longer.
+  experimental: { proxyTimeout: 180_000 },
   async rewrites() {
     return [
       { source: "/backend/:path*", destination: `${API_URL}/:path*` },

@@ -167,3 +167,35 @@ def test_discovery_gives_up_with_a_plain_message_when_nothing_usable_exists():
     assert AI.explain_case(c2, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False and len(f2.calls) == 2      # one retry only, never a loop
     c3 = AI.GeminiClient("k", post=Fake(AI.AIError("x", status=404)), model="a", get=lambda *a: (_ for _ in ()).throw(RuntimeError("no list")))
     assert AI.explain_case(c3, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False
+
+
+def test_a_busy_answer_is_retried_once_after_a_short_wait():
+    slept = []
+    f = Fake(AI.AIError("busy", status=503), {"summary": "worked"})
+    c = AI.GeminiClient("k", post=f, model="gemini-3-flash", sleep=slept.append, get=lambda *a: models_listing())
+    assert AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))["ok"] and slept == [2]
+    assert [x["url"].split("/models/")[1] for x in f.calls] == ["gemini-3-flash:generateContent"] * 2
+
+
+def test_a_model_that_stays_busy_is_replaced_by_the_next_best_one_and_the_working_one_is_kept():
+    listing = models_listing(("gemini-3-flash", ["generateContent"]), ("gemini-2.5-flash", ["generateContent"]))
+    f = Fake(AI.AIError("busy", status=503), AI.AIError("busy", status=503), {"summary": "ok on the fallback"})
+    c = AI.GeminiClient("k", post=f, model="gemini-3-flash", sleep=lambda s: None, get=lambda *a: listing)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] and out["model"] == "gemini-2.5-flash" and f.calls[2]["url"].endswith("/models/gemini-2.5-flash:generateContent")
+
+
+def test_when_every_model_is_busy_it_stops_after_three_models_with_a_plain_message():
+    listing = models_listing(*[(f"gemini-{n}-flash", ["generateContent"]) for n in (3, 4, 5, 6, 7)])
+    f = Fake(*[AI.AIError("busy", status=503) for _ in range(12)])
+    c = AI.GeminiClient("k", post=f, model="gemini-2-flash", sleep=lambda s: None, get=lambda *a: listing)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] is False and "busy right now" in out["error"] and len(f.calls) == 6      # 3 models x 2 attempts, never a loop
+
+
+def test_server_errors_from_the_service_become_the_busy_message(monkeypatch):
+    import types, httpx
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: types.SimpleNamespace(status_code=503, json=lambda: {}))
+    with pytest.raises(AI.AIError) as e:
+        AI._httpx_post("https://example.invalid/x", {}, {}, 1)
+    assert e.value.status == 503 and "busy right now" in str(e.value)
