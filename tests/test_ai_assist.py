@@ -136,3 +136,34 @@ def test_from_env_is_off_without_a_key(monkeypatch):
     assert AI.GeminiClient.from_env() is None
     monkeypatch.setenv("GEMINI_API_KEY", "  k  ")
     assert AI.GeminiClient.from_env() is not None
+
+
+def models_listing(*names):
+    return {"models": [{"name": f"models/{n}", "supportedGenerationMethods": m} for n, m in names]}
+
+
+def test_an_unknown_model_triggers_one_discovery_of_the_newest_stable_flash_and_a_retry():
+    listing = models_listing(("gemini-2.5-flash", ["generateContent"]), ("gemini-3-flash", ["generateContent", "countTokens"]), ("gemini-3-flash-preview", ["generateContent"]),
+                             ("gemini-3-pro", ["generateContent"]), ("gemini-3.5-flash-lite", ["generateContent"]), ("gemini-4-flash-live", ["generateContent"]),
+                             ("embedding-001", ["embedContent"]), ("gemini-3-flash-embed", ["embedContent"]))
+    seen = {}
+    f = Fake(AI.AIError("unknown model", status=404), {"summary": "worked"})
+    c = AI.GeminiClient("SECRET-KEY-123", post=f, model="gemini-2.5-flash", get=lambda url, headers, timeout: seen.update(url=url, key=headers.get("x-goog-api-key")) or listing)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] and out["model"] == "gemini-3-flash"                                   # not the preview, lite, live, pro or embedding models
+    assert f.calls[0]["url"].endswith("/models/gemini-2.5-flash:generateContent") and f.calls[1]["url"].endswith("/models/gemini-3-flash:generateContent")
+    assert seen["url"].endswith("/models?pageSize=200") and seen["key"] == "SECRET-KEY-123" and "SECRET" not in seen["url"]
+    f.answers.append({"summary": "again"})
+    assert AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))["ok"] and f.calls[2]["url"].endswith("/models/gemini-3-flash:generateContent")   # remembered, no second discovery
+
+
+def test_discovery_gives_up_with_a_plain_message_when_nothing_usable_exists():
+    f = Fake(AI.AIError("unknown model", status=404))
+    c = AI.GeminiClient("k", post=f, model="gone-model", get=lambda *a: models_listing(("embedding-001", ["embedContent"])))
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] is False and "gone-model" in out["error"] and "GEMINI_MODEL" in out["error"] and len(f.calls) == 1
+    f2 = Fake(AI.AIError("unknown model", status=404), AI.AIError("unknown model", status=404))
+    c2 = AI.GeminiClient("k", post=f2, model="a", get=lambda *a: models_listing(("gemini-3-flash", ["generateContent"])))
+    assert AI.explain_case(c2, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False and len(f2.calls) == 2      # one retry only, never a loop
+    c3 = AI.GeminiClient("k", post=Fake(AI.AIError("x", status=404)), model="a", get=lambda *a: (_ for _ in ()).throw(RuntimeError("no list")))
+    assert AI.explain_case(c3, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False

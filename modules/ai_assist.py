@@ -43,11 +43,13 @@ def load_config(path: Optional[str | Path] = None) -> dict:
 class GeminiClient:
     """Minimal REST client. `post(url, headers, body, timeout) -> dict` is injectable for tests."""
 
-    def __init__(self, api_key: str, cfg: Optional[dict] = None, post: Optional[Callable] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str, cfg: Optional[dict] = None, post: Optional[Callable] = None, model: Optional[str] = None, get: Optional[Callable] = None):
         self.cfg = cfg or load_config()
         self.model = model or os.environ.get("GEMINI_MODEL") or self.cfg["model"]
         self._key = api_key
         self._post = post or _httpx_post
+        self._get = get or _httpx_get
+        self._discovered = False
 
     @classmethod
     def from_env(cls, cfg: Optional[dict] = None, post: Optional[Callable] = None) -> Optional["GeminiClient"]:
@@ -57,6 +59,22 @@ class GeminiClient:
     def __repr__(self) -> str:                                    # never print the key
         return f"GeminiClient(model={self.model!r})"
 
+    def _discover(self, base: str, headers: dict) -> Optional[str]:
+        """The newest stable 'flash' model this key can call generateContent on (falls back to any gemini model)."""
+        try:
+            data = self._get(f"{base}/models?pageSize=200", headers, self.cfg["timeout_s"])
+        except Exception:
+            return None
+        names = []
+        for m in data.get("models", []) if isinstance(data, dict) else []:
+            n = str(m.get("name", "")).replace("models/", "")
+            if n.startswith("gemini") and "generateContent" in (m.get("supportedGenerationMethods") or []):
+                names.append(n)
+        bad = ("lite", "preview", "exp", "image", "tts", "live", "audio", "embedding", "thinking", "vision", "robotics", "computer", "customtools")
+        stable = [n for n in names if "flash" in n and not any(b in n for b in bad)] or [n for n in names if not any(b in n for b in bad)] or names
+        rank = lambda n: [int(x) for x in re.findall(r"\d+", n)]
+        return sorted(stable, key=rank)[-1] if stable else None
+
     def generate_json(self, prompt: str, pdf: Optional[bytes] = None) -> dict:
         """Returns the parsed JSON object the model answered with. Raises AIError with a plain message."""
         parts: list = [{"text": prompt}]
@@ -64,9 +82,20 @@ class GeminiClient:
             parts.append({"inlineData": {"mimeType": "application/pdf", "data": base64.b64encode(pdf).decode("ascii")}})
         body = {"systemInstruction": {"parts": [{"text": SYSTEM}]}, "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": {"temperature": self.cfg["temperature"], "responseMimeType": "application/json"}}
-        url = f"{(os.environ.get('GEMINI_ENDPOINT') or self.cfg['endpoint']).rstrip('/')}/models/{self.model}:generateContent"
+        base = (os.environ.get("GEMINI_ENDPOINT") or self.cfg["endpoint"]).rstrip("/")
+        headers = {"x-goog-api-key": self._key, "Content-Type": "application/json"}
         try:
-            resp = self._post(url, {"x-goog-api-key": self._key, "Content-Type": "application/json"}, body, self.cfg["timeout_s"])
+            try:
+                resp = self._post(f"{base}/models/{self.model}:generateContent", headers, body, self.cfg["timeout_s"])
+            except AIError as exc:
+                if exc.status != 404 or self._discovered:
+                    raise
+                self._discovered = True                              # the configured model is not available to this key: ask which ones are, once
+                found = self._discover(base, headers)
+                if not found or found == self.model:
+                    raise AIError(f"the AI service does not know the model '{self.model}' and no other usable model was found; set GEMINI_MODEL")
+                self.model = found
+                resp = self._post(f"{base}/models/{self.model}:generateContent", headers, body, self.cfg["timeout_s"])
         except AIError:
             raise
         except Exception as exc:                                  # network / timeout: say so without leaking the URL or key
@@ -80,18 +109,30 @@ class GeminiClient:
 
 
 class AIError(Exception):
-    pass
+    def __init__(self, message: str, status: Optional[int] = None):
+        super().__init__(message)
+        self.status = status
 
 
 def _httpx_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
     import httpx
     r = httpx.post(url, headers=headers, json=body, timeout=timeout)
+    if r.status_code == 404:
+        raise AIError("the AI service does not know this model name", status=404)
     if r.status_code in (400, 403):
-        raise AIError("the AI service refused the request (check the API key and model name)")
+        raise AIError("the AI service refused the request (check the API key and model name)", status=r.status_code)
     if r.status_code == 429:
-        raise AIError("the AI service is busy or over its quota; try again in a minute")
+        raise AIError("the AI service is busy or over its quota; try again in a minute", status=429)
     if r.status_code >= 400:
         raise AIError(f"the AI service returned an error ({r.status_code})")
+    return r.json()
+
+
+def _httpx_get(url: str, headers: dict, timeout: float) -> dict:
+    import httpx
+    r = httpx.get(url, headers=headers, timeout=timeout)
+    if r.status_code >= 400:
+        raise AIError(f"the AI service returned an error ({r.status_code})", status=r.status_code)
     return r.json()
 
 
