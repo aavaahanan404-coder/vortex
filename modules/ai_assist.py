@@ -57,6 +57,8 @@ class GeminiClient:
         self._post = post or _httpx_post
         self._get = get or _httpx_get
         self._sleep = sleep or time.sleep
+        self._cooldown_until = 0.0                                 # after a usage-limit answer: no calls for a minute so the limit can recover
+        self._cooldown_msg = ""
         self._ranked: Optional[list] = None                      # models this key can use, best first (looked up once, only when needed)
 
     @classmethod
@@ -88,7 +90,7 @@ class GeminiClient:
         return sorted(set(names), key=lambda n: (tier(n), [-x for x in rank(n)]))
 
     def _call(self, base: str, headers: dict, body: dict, model: str, t0: float) -> dict:
-        """One model, with one retry after a short wait when the service says it is busy (429 / 5xx / too slow), inside the overall time limit."""
+        """One model, with one retry after a short wait when the service is busy (5xx / too slow); a 429 is never retried, it would only use up more quota."""
         for attempt in (0, 1):
             t = time.monotonic()
             try:
@@ -96,8 +98,8 @@ class GeminiClient:
                 _log(f"model={model} attempt={attempt + 1} ok {time.monotonic() - t:.1f}s")
                 return out
             except AIError as exc:
-                _log(f"model={model} attempt={attempt + 1} status={exc.status} {time.monotonic() - t:.1f}s")
-                if exc.status in (429, 503) and attempt == 0 and time.monotonic() - t0 < self.cfg["deadline_s"]:
+                _log(f"model={model} attempt={attempt + 1} status={exc.status} {time.monotonic() - t:.1f}s {exc.detail}".rstrip())
+                if exc.status == 503 and attempt == 0 and time.monotonic() - t0 < self.cfg["deadline_s"]:
                     self._sleep(2)
                     continue
                 raise
@@ -113,6 +115,9 @@ class GeminiClient:
         base = (os.environ.get("GEMINI_ENDPOINT") or self.cfg["endpoint"]).rstrip("/")
         headers = {"x-goog-api-key": self._key, "Content-Type": "application/json"}
         first, tried, busy, queue, t0 = self.model, set(), set(), [self.model], time.monotonic()
+        if t0 < self._cooldown_until:
+            raise AIError(self._cooldown_msg, status=429)
+        limited = None
         try:
             resp = None
             while queue:
@@ -125,6 +130,8 @@ class GeminiClient:
                 except AIError as exc:
                     if exc.status not in (404, 429, 503):
                         raise
+                    if exc.status == 429:
+                        limited = exc
                     if exc.status != 404:
                         busy.add(m)                                # a model that is unknown does not use up the fallback budget
                     if self._ranked is None:                          # the first problem: find out which models this key can use (once)
@@ -133,6 +140,11 @@ class GeminiClient:
                     if not queue:
                         if exc.status == 404:
                             raise AIError(f"the AI service does not know the model '{first}' and no other usable model was found; set GEMINI_MODEL")
+                        if limited is not None:
+                            why = f" Google says: {limited.detail}" if limited.detail else ""
+                            self._cooldown_msg = "the AI service's usage limit for this key was reached; wait a minute, or check the key's quota in Google AI Studio." + why
+                            self._cooldown_until = time.monotonic() + 60
+                            raise AIError(self._cooldown_msg, status=429)
                         raise AIError("the AI service is busy right now; try again in a minute", status=exc.status)
         except AIError:
             raise
@@ -147,9 +159,17 @@ class GeminiClient:
 
 
 class AIError(Exception):
-    def __init__(self, message: str, status: Optional[int] = None):
+    def __init__(self, message: str, status: Optional[int] = None, detail: str = ""):
         super().__init__(message)
         self.status = status
+        self.detail = detail                                      # Google's own words about the problem (never the key); for the log and the quota message
+
+
+def _reason(r) -> str:
+    try:
+        return re.sub(r"\s+", " ", str(r.json().get("error", {}).get("message", "")))[:240]
+    except Exception:
+        return ""
 
 
 def _httpx_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
@@ -159,15 +179,15 @@ def _httpx_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
     except httpx.TimeoutException:
         raise AIError("the AI service took too long to answer", status=503)
     if r.status_code == 404:
-        raise AIError("the AI service does not know this model name", status=404)
+        raise AIError("the AI service does not know this model name", status=404, detail=_reason(r))
     if r.status_code in (400, 403):
-        raise AIError("the AI service refused the request (check the API key and model name)", status=r.status_code)
+        raise AIError("the AI service refused the request (check the API key and model name)", status=r.status_code, detail=_reason(r))
     if r.status_code == 429:
-        raise AIError("the AI service is busy or over its quota; try again in a minute", status=429)
+        raise AIError("the AI service's usage limit was reached", status=429, detail=_reason(r))
     if r.status_code >= 500:
-        raise AIError("the AI service is busy right now; try again in a minute", status=503)
+        raise AIError("the AI service is busy right now; try again in a minute", status=503, detail=_reason(r))
     if r.status_code >= 400:
-        raise AIError(f"the AI service returned an error ({r.status_code})")
+        raise AIError(f"the AI service returned an error ({r.status_code})", detail=_reason(r))
     return r.json()
 
 

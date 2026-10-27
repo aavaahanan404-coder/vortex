@@ -239,3 +239,28 @@ def test_a_single_overloaded_flash_falls_back_to_the_lite_model_and_an_unknown_f
     c = AI.GeminiClient("k", post=f, model="old-model", sleep=lambda s: None, get=lambda *a: listing)
     out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
     assert out["ok"] and out["model"] == "gemini-3-flash-lite" and [x["url"].split("/models/")[1].split(":")[0] for x in f.calls] == ["old-model", "gemini-3-flash", "gemini-3-flash", "gemini-3-flash-lite"]
+
+
+def test_a_usage_limit_answer_is_never_retried_shows_googles_reason_and_pauses_for_a_minute(monkeypatch):
+    import modules.ai_assist as mod
+    now = {"t": 1000.0}
+    monkeypatch.setattr(mod.time, "monotonic", lambda: now["t"])
+    listing = models_listing(("gemini-3-flash", ["generateContent"]), ("gemini-2.5-flash", ["generateContent"]), ("gemini-3-flash-lite", ["generateContent"]), ("gemini-3-pro", ["generateContent"]))
+    lim = AI.AIError("limit", status=429, detail="Quota exceeded for metric generate_content_free_tier_requests, limit: 5")
+    f = Fake(lim, lim, lim, {"summary": "after the pause"})
+    c = AI.GeminiClient("SECRET-KEY-123", post=f, model="gemini-3-flash", sleep=lambda s: None, get=lambda *a: listing)
+    out = AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))
+    assert out["ok"] is False and len(f.calls) == 3 and "usage limit" in out["error"] and "limit: 5" in out["error"] and "SECRET" not in out["error"]   # one call per model, no retries
+    now["t"] += 30
+    assert AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))["ok"] is False and len(f.calls) == 3                                    # paused: Google is not called
+    now["t"] += 40
+    assert AI.explain_case(c, AI.case_summary({}, FINDINGS, None, [], True))["ok"] and len(f.calls) == 4                                              # recovered after a minute
+
+
+def test_googles_own_error_text_is_read_from_the_response_body(monkeypatch):
+    import types, httpx
+    body = {"error": {"code": 429, "message": "You exceeded your current quota,\n please check your plan.", "status": "RESOURCE_EXHAUSTED"}}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: types.SimpleNamespace(status_code=429, json=lambda: body))
+    with pytest.raises(AI.AIError) as e:
+        AI._httpx_post("https://example.invalid/x", {"x-goog-api-key": "SECRET"}, {}, 1)
+    assert e.value.status == 429 and e.value.detail == "You exceeded your current quota, please check your plan." and "SECRET" not in e.value.detail
