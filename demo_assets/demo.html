@@ -64,7 +64,7 @@
         <tr><th scope="row">Applicant: new, Building plan card</th><td><code>03_building_plan_PHONE_PHOTO.jpg</code> instead of the PDF</td><td>Drag the corners, Straighten, Use this page; the values are read from the photo</td></tr>
         <tr><th scope="row">Any empty card</th><td><code>03_building_plan_BLURRY_PHOTO.jpg</code></td><td>A warning appears before the upload: "looks blurry"</td></tr>
         <tr><th scope="row">Admin: Rules and norms</th><td><code>admin_rule_pdfs\rule_update_example.pdf</code></td><td>A structured update: preview, a rejected row, a rule switched off</td></tr>
-        <tr><th scope="row">Admin: Rules and norms</th><td><code>admin_rule_pdfs\handbook_prose_example.pdf</code></td><td>Refused plainly: prose handbooks need the AI step (not built yet)</td></tr>
+        <tr><th scope="row">Admin: Rules and norms</th><td><code>admin_rule_pdfs\handbook_prose_example.pdf</code></td><td>The table reader refuses it; with the Gemini key, &ldquo;Read it with AI&rdquo; proposes 3 changes (18 and 12 students per teacher, 25-year lease) for you to check</td></tr>
       </tbody>
     </table>
     <p class="faint">The "Applicant: new" form needs exactly: <b>Bharathi College of Engineering</b>, date <b>2026-01-14</b>, Existing institution, Engineering. Submitting it adds a fourth (low-risk) case to the queue; restart without Keep to reset. All files are synthetic.</p>
@@ -111,7 +111,7 @@
       <ul><li><b>Rules and norms</b>: Download template, then upload <code>rule_update_example.pdf</code> (also downloadable below).</li>
           <li>Read the preview (arrows, rejected rows, effect on cases); tick the confirmation (it switches a rule off) and <b>Apply</b>.</li>
           <li>Press <b>Restore shipped rules</b>, then <b>Verify audit trail</b>: every step is chained and tamper-evident.</li>
-          <li>Last, upload <code>handbook_prose_example.pdf</code>: it is refused with a plain explanation (prose handbooks are the planned AI step).</li></ul>
+          <li>Last, upload <code>handbook_prose_example.pdf</code>: the table reader refuses it. If the Gemini key is set, press <b>Read it with AI</b>: it proposes three changes with the document's own sentence beside each; <b>Explain these changes</b> and <b>Show ... as YAML</b> are under the list. Nothing applies until you tick the confirmation.</li></ul>
       <p><a class="btn" href="?as=admin" target="_blank" rel="noopener">Open admin</a> <a class="btn sec" href="/demo/rule_update_example.pdf" download>Download example rule PDF</a></p>
     </li>
   </ol>
@@ -121,7 +121,7 @@
     <ul>
       <li>All data is synthetic and the registries are mock; the norms (staff ratios, areas) are illustrative, not the handbook's.</li>
       <li>Sign-in here is by fixed token; a deployment uses the organisation's single sign-on.</li>
-      <li>Not built yet: the detector for copy-and-paste forgery inside a scan, and reading a prose handbook with AI (the rule PDF must be a table).</li>
+      <li>Not built yet: the detector for copy-and-paste forgery inside a scan, and, without a Gemini key, reading a prose handbook (the rule PDF must then be a table). The AI help only explains and proposes; people confirm.</li>
       <li>Photo straightening was tested on simulated photos, not yet on a pile of real phone photos.</li>
     </ul>
   </div>

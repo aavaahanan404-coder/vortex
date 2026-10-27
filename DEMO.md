@@ -44,7 +44,7 @@ Everything is ready in **`demo_assets/sample_uploads/`** (the Demo hub shows thi
 | Same applicant, Building plan card | `03_building_plan_PHONE_PHOTO.jpg` instead of the PDF | corner handles, Straighten, values read from the photo |
 | Any empty card | `03_building_plan_BLURRY_PHOTO.jpg` | "looks blurry" warning before upload |
 | Admin, Rules and norms | `admin_rule_pdfs/rule_update_example.pdf` | preview with ups and downs, a rejected row, a rule switched off |
-| Admin, Rules and norms | `admin_rule_pdfs/handbook_prose_example.pdf` | refused: prose handbooks need the (planned) AI step |
+| Admin, Rules and norms | `admin_rule_pdfs/handbook_prose_example.pdf` | refused by the table reader; with a Gemini key, "Read it with AI" proposes 3 changes (see the AI section) |
 
 All of it is synthetic. Bharathi College is a clean institution, so its papers pass every check; submitting it adds a low-risk fourth case to the queue. The other demo institutions are already loaded; their papers are not interchangeable with Bharathi's.
 

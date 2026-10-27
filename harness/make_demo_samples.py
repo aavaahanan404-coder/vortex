@@ -23,18 +23,18 @@ INST = "SYN-I0003"
 
 PROSE = """APPROVAL PROCESS HANDBOOK (sample text, written for the demo)
 
-3.4 Faculty. An institution shall maintain, at all times, at least one full-time teacher for every fifteen students
-admitted in an engineering programme, and one for every twenty students in a polytechnic programme. Part-time
+3.4 Faculty. An institution shall maintain, at all times, at least one full-time teacher for every eighteen students
+admitted in an engineering programme, and one for every twelve students in a management (MBA) programme. Part-time
 faculty shall not be counted towards this ratio unless the Council has granted a written exception.
 
 3.5 Land and building. The built-up area available for instruction shall be adequate for the sanctioned intake. Where
-the land is held on lease, the lease shall run for not less than thirty years from the date of application.
+the land is held on lease, the lease shall run for not less than twenty-five years from the date of application.
 
 3.6 Fire safety. A fire safety certificate valid on the date of application shall be furnished with every
 application. A certificate that has lapsed is treated as if none had been furnished.
 
-This page is ordinary prose, not a table, so the rule changer cannot read it: it is the file to show how an
-unstructured document is refused, and why reading such handbooks needs the AI step that is planned."""
+This page is ordinary prose, not a table, so the table reader cannot read it and refuses it. With the Gemini key
+set, "Read it with AI" turns the numbers above into a preview for you to check and confirm."""
 
 README = """SAMPLE FILES FOR THE DEMO (all synthetic)
 
@@ -52,7 +52,8 @@ APPLICANT  -> sign in with the Demo hub button "Applicant: new" (token demo-appl
 
 ADMIN -> Demo hub button "Admin" (demo-admin), Rules and norms, folder admin_rule_pdfs/
   rule_update_example.pdf      a structured update: accepted, with notes (a bad row, a rule switched off); Apply, then Restore.
-  handbook_prose_example.pdf   a prose page: refused with a plain message (reading such files needs the AI step, not built yet).
+  handbook_prose_example.pdf   a prose page: the table reader refuses it; with the Gemini key, "Read it with AI" proposes 3 changes
+                               (engineering 18 students per teacher, MBA 12, lease 25 years) for you to check and confirm.
 """
 
 

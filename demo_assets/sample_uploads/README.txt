@@ -14,4 +14,5 @@ APPLICANT  -> sign in with the Demo hub button "Applicant: new" (token demo-appl
 
 ADMIN -> Demo hub button "Admin" (demo-admin), Rules and norms, folder admin_rule_pdfs/
   rule_update_example.pdf      a structured update: accepted, with notes (a bad row, a rule switched off); Apply, then Restore.
-  handbook_prose_example.pdf   a prose page: refused with a plain message (reading such files needs the AI step, not built yet).
+  handbook_prose_example.pdf   a prose page: the table reader refuses it; with the Gemini key, "Read it with AI" proposes 3 changes
+                               (engineering 18 students per teacher, MBA 12, lease 25 years) for you to check and confirm.
