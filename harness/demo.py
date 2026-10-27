@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import uvicorn
+from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient
 
 from api.app import Settings, create_app
@@ -79,6 +80,16 @@ def main() -> None:
         shutil.rmtree(data)
     st = Settings(data, c.corpus_root() / "world" / "world.sqlite", tokens(ids), 25, 26261, DOC_TYPES)
     app = create_app(st)
+    assets = ROOT / "demo_assets"
+
+    @app.get("/demo", include_in_schema=False)                          # the presenter's hub; exists only in this demo harness
+    def hub():
+        return FileResponse(assets / "demo.html", media_type="text/html")
+
+    @app.get("/demo/rule_update_example.pdf", include_in_schema=False)
+    def example_rule_pdf():
+        return FileResponse(assets / "rule_update_example.pdf", media_type="application/pdf", filename="rule_update_example.pdf")
+
     if fresh:
         seed(TestClient(app), ids)
     print("\nDemo tokens (paste one on the sign-in page):")

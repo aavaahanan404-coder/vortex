@@ -1,9 +1,10 @@
-# Starts the seeded demo on Windows: the API (:8000) and the web app (:3000), each in its own window.
-#   .\run_demo.ps1            first run or a clean start (re-seeds the demo data, about a minute)
+# Starts the seeded demo on Windows: the API (:8000) and the web app (:3000), each in its own window, then opens the demo hub.
+# Normally you just double-click start_demo.bat, which runs this.
+#   .\run_demo.ps1            clean start (re-seeds the demo data, about a minute)
 #   .\run_demo.ps1 -Keep      reuse the data of the last run (fast start, keeps what you did)
 #   .\run_demo.ps1 -Dev       use the Next.js dev server instead of the production build
-# Open http://localhost:3000 ; other devices on the same network use the address printed at the end.
-param([switch]$Keep, [switch]$Dev)
+#   .\run_demo.ps1 -NoBrowser do not open the browser
+param([switch]$Keep, [switch]$Dev, [switch]$NoBrowser)
 
 $root = $PSScriptRoot
 $py = Join-Path $root ".venv\Scripts\python.exe"
@@ -14,12 +15,24 @@ $keepArg = if ($Keep) { " --keep" } else { "" }
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle='SIH26261 API'; Set-Location '$root'; & '$py' -m harness.demo --port 8000$keepArg"
 
 $web = if ($Dev) { "npm run dev -- -H 0.0.0.0 -p 3000" }
-       else { "if (-not (Test-Path .next\BUILD_ID)) { npm run build }; npx next start -H 0.0.0.0 -p 3000" }
+       else { "npm run build; npx next start -H 0.0.0.0 -p 3000" }
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle='SIH26261 web'; Set-Location '$root\frontend'; $web"
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } | Select-Object -First 1).IPAddress
 Write-Host ""
-Write-Host "Starting. The API window prints the demo tokens once seeding is finished (about a minute on a fresh start)."
-Write-Host "  On this computer : http://localhost:3000"
-if ($ip) { Write-Host "  On the same Wi-Fi: http://${ip}:3000   (allow Node.js through the Windows firewall when asked)" }
-Write-Host "Close the two new windows to stop the demo."
+Write-Host "Starting the demo. The first start prepares the demo data (about a minute) and the web app is built (about half a minute); please wait..."
+
+# wait until the web app can reach the API (the API answers only after its data is ready)
+$ready = $false
+for ($i = 0; $i -lt 150 -and -not $ready; $i++) {
+    Start-Sleep -Seconds 2
+    try { $ready = (Invoke-RestMethod -Uri "http://127.0.0.1:3000/backend/health" -TimeoutSec 3).ok } catch { $ready = $false }
+}
+if (-not $ready) { Write-Host "Not ready after 5 minutes. Look at the two new windows for an error message." -ForegroundColor Yellow; exit 1 }
+
+Write-Host ""
+Write-Host "READY." -ForegroundColor Green
+Write-Host "  Demo hub, this computer : http://localhost:3000/demo"
+if ($ip) { Write-Host "  Other devices, same Wi-Fi: http://${ip}:3000   (allow Node.js through the Windows firewall when asked)" }
+Write-Host "  Close the two new windows to stop the demo."
+if (-not $NoBrowser) { Start-Process "http://localhost:3000/demo" }

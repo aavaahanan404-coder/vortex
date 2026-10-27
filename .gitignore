@@ -9,4 +9,4 @@ data_demo/
 frontend/node_modules/
 frontend/.next/
 frontend/*.tsbuildinfo
-frontend/public/demo_rule_update.pdf
+frontend/public/

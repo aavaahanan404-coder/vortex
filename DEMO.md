@@ -1,17 +1,17 @@
 # Running the demo
 
-## Start (Windows, from this folder)
+## Start: one double-click
+Double-click **`start_demo.bat`** (or run `.un_demo.ps1` in PowerShell). It starts the API and the web app in two windows, waits until everything is ready (about 1.5 minutes: the demo data is prepared and the web app is built), and opens the **Demo hub** in your browser.
 
-```powershell
-.\run_demo.ps1          # clean start: seeds the demo data (about a minute)
-.\run_demo.ps1 -Keep    # later starts: reuse the data of the last run
-```
+The **Demo hub** (`http://localhost:3000/demo`) is the one page you present from:
+- a green "System: ready" light;
+- **Open as...** buttons: one click opens a new tab already signed in as the supervisor, a reviewer, an applicant or the admin (no tokens to type);
+- the five-minute story, step by step, with what to say and what to click, and tick boxes to keep your place;
+- the "be upfront" list of limits, the example rule PDF to download, and quick fixes.
 
-Two windows open: **SIH26261 API** (port 8000) and **SIH26261 web** (port 3000). When the API window lists the demo tokens it is ready. Open **http://localhost:3000**. Close the two windows to stop.
+Later starts: `start_demo.bat -Keep` keeps the data of the last run. Close the two windows to stop. To show it on other devices on the same Wi-Fi, give them the address the script prints (`http://<your-ip>:3000`; allow Node.js through the firewall when asked). They sign in with the tokens below. The tokens are static: use a private network, never the open internet.
 
-To show it on other devices on the same Wi-Fi, give them the address the script prints (`http://<your-ip>:3000`); allow Node.js through the Windows firewall when asked. Only port 3000 needs to be reachable (the web app forwards to the API). The demo tokens are static: use a private network, never the open internet.
-
-### Without the script
+### Without the script (the hub is then at the same address, /demo)
 ```powershell
 .venv\Scripts\python.exe -m harness.demo --port 8000          # window 1 (add --keep to reuse data)
 cd frontend; npm run build; npx next start -H 0.0.0.0 -p 3000 # window 2 (use "npm run dev" for development)
@@ -43,7 +43,7 @@ Cases in the queue: SYN-I0031 (expiry date covered and replaced, reviewers dev +
 
 ## If something goes wrong
 - Page says it cannot reach the server: the API window is still seeding or was closed; wait for the token list.
-- Sign-in does nothing the first time with `-Dev`: the dev server was compiling; try again (the production start does not do this).
+- With `-Dev`, sign-in does nothing the first time: the dev server was compiling; try again (the production start does not do this).
 - Port already in use: close old SIH26261 windows (or `Get-Process python,node`), start again.
 - Start from scratch: delete the `data_demo` folder or run without `-Keep`.
 

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo hub</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --ink:#0f172a; --soft:#475569; --faint:#64748b; --line:#e2e8f0; --brand:#1f4e79; --brand-l:#e8f0f8; --ok:#047857; --ok-l:#d1fae5; --warn:#92400e; --warn-l:#fef3c7; --bad:#991b1b; --bad-l:#fee2e2; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1220; --card:#131c2e; --ink:#e5e9f0; --soft:#b6c0d0; --faint:#8b97aa; --line:#25324a; --brand:#7db3e6; --brand-l:#17304d; --ok:#6ee7b7; --ok-l:#0f3a2c; --warn:#fcd34d; --warn-l:#3b2f0b; --bad:#fca5a5; --bad-l:#451a1a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 64rem; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:1rem; }
+  h1 { font-size:1.5rem; margin:0; } h2 { font-size:1.15rem; margin:2rem 0 .5rem; } h3 { font-size:1rem; margin:0; }
+  p { margin:.25rem 0; } .soft { color:var(--soft); } .faint { color:var(--faint); font-size:.875rem; }
+  .pill { display:inline-block; padding:.15rem .6rem; border-radius:999px; font-size:.8rem; font-weight:600; }
+  .ok { background:var(--ok-l); color:var(--ok); } .warn { background:var(--warn-l); color:var(--warn); } .bad { background:var(--bad-l); color:var(--bad); }
+  .grid { display:grid; gap:.75rem; grid-template-columns:repeat(auto-fill,minmax(15.5rem,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:.75rem; padding:.9rem 1rem; display:flex; flex-direction:column; gap:.4rem; }
+  .card p { flex:1; }
+  a.btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:2.5rem; padding:.45rem .9rem; border-radius:.5rem; background:var(--brand); color:#fff; text-decoration:none; font-weight:600; }
+  @media (prefers-color-scheme: dark) { a.btn { color:#0b1220; } }
+  a.btn.sec { background:transparent; color:var(--brand); border:1px solid var(--brand); }
+  a.btn:focus-visible, summary:focus-visible, input:focus-visible { outline:3px solid #f59e0b; outline-offset:2px; }
+  ol.story { list-style:none; margin:0; padding:0; display:grid; gap:.75rem; counter-reset:s; }
+  ol.story > li { counter-increment:s; background:var(--card); border:1px solid var(--line); border-radius:.75rem; padding:.9rem 1rem .9rem 3.2rem; position:relative; }
+  ol.story > li::before { content:counter(s); position:absolute; left:.9rem; top:.85rem; width:1.7rem; height:1.7rem; border-radius:50%; background:var(--brand-l); color:var(--brand); display:grid; place-items:center; font-weight:700; }
+  ol.story > li.done { opacity:.6; }
+  ol.story label { display:flex; gap:.5rem; align-items:center; margin-top:.5rem; font-size:.875rem; color:var(--faint); }
+  ul { margin:.25rem 0 .25rem 1.1rem; padding:0; } li { margin:.15rem 0; }
+  .say { border-left:3px solid var(--brand); padding-left:.75rem; margin:.5rem 0; color:var(--soft); }
+  .note { background:var(--warn-l); color:var(--warn); border-radius:.75rem; padding:.8rem 1rem; }
+  code { background:var(--brand-l); color:var(--brand); padding:.05rem .35rem; border-radius:.3rem; font-size:.9em; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:.75rem; padding:.7rem 1rem; } summary { cursor:pointer; font-weight:600; }
+  #go { margin-top:1rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Demo hub</h1><p class="soft">Document verification for institution approvals: sample data, mock registries.</p></div>
+    <p aria-live="polite">System: <span id="status" class="pill warn">checking...</span></p>
+  </header>
+  <p id="go" class="note" hidden></p>
+
+  <h2>Open as...</h2>
+  <p class="faint">Each button opens a new tab already signed in as that person, so you can keep this page as your script.</p>
+  <div class="grid" id="roles"></div>
+
+  <h2>The five-minute story</h2>
+  <ol class="story" id="story">
+    <li data-k="s1">
+      <h3>Applicant: the portal tells you what to fix</h3>
+      <p class="soft">Open the applicant with a draft (cards, progress bar, 48-hour note).</p>
+      <p class="say">Say: "An institution uploads its documents. We check each one the moment it arrives and explain, in plain words, what to correct."</p>
+      <ul><li>Press <b>Check my application</b>: the fire certificate is expired, a mandatory document is missing.</li>
+          <li>Open <b>Values we read from this document</b>: the form is pre-filled from the document.</li></ul>
+      <p class="faint">Point out: the applicant sees nothing about fraud checks, scores or other institutions.</p>
+      <p><a class="btn" href="?as=applicant64" target="_blank" rel="noopener">Open applicant (draft)</a></p>
+    </li>
+    <li data-k="s2">
+      <h3>Phone photo: straighten and upload</h3>
+      <p class="say">Say: "Most applicants will photograph papers. They drag four handles to the page corners; we flatten it before reading."</p>
+      <ul><li>On an empty card press <b>Upload</b>, pick a photo of a printed page (any picture works for the demo).</li>
+          <li>Drag a corner handle, press <b>Straighten</b>, then <b>Use this page</b>. Unclear values are marked "please check".</li></ul>
+    </li>
+    <li data-k="s3">
+      <h3>Supervisor: the queue and the evidence</h3>
+      <p class="say">Say: "The system never approves or rejects. It ranks cases for people, and shows exactly where it looked."</p>
+      <ul><li>The queue is ordered by score. Open <b>SYN-I0031</b> and choose the <b>Fire safety certificate</b> tab.</li>
+          <li>The date that was covered and replaced is boxed on the page; the finding is listed beside it.</li>
+          <li>Press <b>Assign</b> on SYN-I0001 in the queue; press <b>Evidence report (PDF)</b> on a case.</li></ul>
+      <p><a class="btn" href="?as=supervisor" target="_blank" rel="noopener">Open supervisor</a></p>
+    </li>
+    <li data-k="s4">
+      <h3>Reviewer: decides blind</h3>
+      <p class="say">Say: "Two reviewers look independently. They see the evidence but not the machine's score, so the machine cannot steer them."</p>
+      <ul><li>Open the case SYN-I0031: the blue "Blind review" banner, no score anywhere.</li>
+          <li>Record a decision. It stays blind until the colleague decides; a third reviewer breaks a tie.</li></ul>
+      <p><a class="btn" href="?as=reviewer_dev" target="_blank" rel="noopener">Open reviewer (dev)</a> <a class="btn sec" href="?as=reviewer_chi" target="_blank" rel="noopener">Open reviewer (chi)</a></p>
+    </li>
+    <li data-k="s5">
+      <h3>Admin: change the rules by uploading a PDF</h3>
+      <p class="say">Say: "When the regulator revises a norm, an administrator uploads the table. They see every change, up or down, and its effect on cases already received, before anything applies."</p>
+      <ul><li><b>Rules and norms</b>: Download template, then upload the example update below.</li>
+          <li>Read the preview (arrows, rejected rows, effect on cases); tick the confirmation (it switches a rule off) and <b>Apply</b>.</li>
+          <li>Press <b>Restore shipped rules</b>, then <b>Verify audit trail</b>: every step is chained and tamper-evident.</li></ul>
+      <p><a class="btn" href="?as=admin" target="_blank" rel="noopener">Open admin</a> <a class="btn sec" href="/demo/rule_update_example.pdf" download>Download example rule PDF</a></p>
+    </li>
+  </ol>
+
+  <h2>Be upfront</h2>
+  <div class="note">
+    <ul>
+      <li>All data is synthetic and the registries are mock; the norms (staff ratios, areas) are illustrative, not the handbook's.</li>
+      <li>Sign-in here is by fixed token; a deployment uses the organisation's single sign-on.</li>
+      <li>Not built yet: the detector for copy-and-paste forgery inside a scan, and reading a prose handbook with AI (the rule PDF must be a table).</li>
+      <li>Photo straightening was tested on simulated photos, not yet on a pile of real phone photos.</li>
+    </ul>
+  </div>
+
+  <h2>If something is off</h2>
+  <details><summary>Quick fixes</summary>
+    <ul>
+      <li>Status stays "starting": the first start prepares the data for about a minute. Wait for "ready".</li>
+      <li>"Not reachable": the API window was closed. Close both demo windows and run <code>start_demo.bat</code> again.</li>
+      <li>To reset the demo to its first state: close both windows, delete the <code>data_demo</code> folder, start again.</li>
+      <li>Reviewer cases empty: use reviewer <b>dev</b> or <b>chi</b> for SYN-I0031, <b>chi</b> or <b>ben</b> for SYN-I0010.</li>
+    </ul>
+  </details>
+</main>
+<script>
+const ROLES = {
+  supervisor:   { token:"demo-supervisor",       to:"/review", name:"Supervisor",             blurb:"Queue ordered by score, case viewer with boxes, assign, evidence PDF." },
+  reviewer_dev: { token:"demo-reviewer-dev",     to:"/review", name:"Reviewer: dev",          blurb:"Blind review of SYN-I0031 (a covered expiry date)." },
+  reviewer_chi: { token:"demo-reviewer-chi",     to:"/review", name:"Reviewer: chi",          blurb:"The second reviewer of SYN-I0031, and first of SYN-I0010." },
+  reviewer_ben: { token:"demo-reviewer-ben",     to:"/review", name:"Reviewer: ben",          blurb:"Second reviewer of SYN-I0010 (edited after signing)." },
+  applicant64:  { token:"demo-applicant-i0064",  to:"/apply",  name:"Applicant: draft",       blurb:"Documents partly uploaded, one certificate expired, one document missing." },
+  applicant03:  { token:"demo-applicant-i0003",  to:"/apply",  name:"Applicant: new",         blurb:"Nothing started: shows the start form." },
+  applicant31:  { token:"demo-applicant-i0031",  to:"/apply",  name:"Applicant: submitted",   blurb:"Already submitted: sees only 'received', nothing about checks." },
+  admin:        { token:"demo-admin",            to:"/admin",  name:"Admin",                  blurb:"Rule changer (upload a rule PDF), 48-hour purge, audit check." }
+};
+const $ = (id) => document.getElementById(id);
+
+// A role link (?as=KEY) signs this tab in and moves on, so every button opens a tab that is already signed in.
+const as = new URLSearchParams(location.search).get("as");
+if (as && ROLES[as]) {
+  try { sessionStorage.setItem("sih26261.token", ROLES[as].token); } catch (e) {}
+  $("go").hidden = false; $("go").textContent = "Signing in as " + ROLES[as].name + "...";
+  location.replace(ROLES[as].to);
+}
+
+$("roles").innerHTML = Object.entries(ROLES).map(([k, r]) =>
+  `<div class="card"><h3>${r.name}</h3><p class="soft">${r.blurb}</p><a class="btn" href="?as=${k}" target="_blank" rel="noopener">Open</a></div>`).join("");
+
+// progress ticks (a convenience, kept only in this browser)
+const KEY = "demo-hub-done";
+let done = {}; try { done = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+document.querySelectorAll("#story > li").forEach((li) => {
+  const k = li.dataset.k, box = document.createElement("label");
+  box.innerHTML = `<input type="checkbox"> shown`;
+  const cb = box.querySelector("input");
+  cb.checked = !!done[k]; li.classList.toggle("done", cb.checked);
+  cb.addEventListener("change", () => { done[k] = cb.checked; li.classList.toggle("done", cb.checked); try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) {} });
+  li.appendChild(box);
+});
+
+// is the API up? (it also tells the presenter when seeding has finished)
+async function ping() {
+  const s = $("status");
+  try {
+    const r = await fetch("/backend/health", { cache: "no-store" });
+    const j = await r.json();
+    if (j.ok) { s.className = "pill ok"; s.textContent = "ready"; return; }
+    throw new Error();
+  } catch (e) {
+    s.className = "pill bad"; s.textContent = "starting or not reachable";
+  }
+}
+ping(); setInterval(ping, 4000);
+</script>
+</body>
+</html>
