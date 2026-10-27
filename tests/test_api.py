@@ -29,13 +29,13 @@ def digital_institution(pred):
     pytest.skip("corpus has no such institution")
 
 
-def make_client(tmp_path, insts, max_mb=25, clock=None):
+def make_client(tmp_path, insts, max_mb=25, clock=None, ai=None):
     tokens = {f"app-{i['inst_id']}": {"role": "applicant", "inst_id": i["inst_id"]} for i in insts}
     tokens.update({"rev-ana": {"role": "reviewer", "user": "ana"}, "rev-ben": {"role": "reviewer", "user": "ben"},
                    "rev-chi": {"role": "reviewer", "user": "chi"}, "rev-dev": {"role": "reviewer", "user": "dev"},
                    "sup": {"role": "supervisor", "user": "sup"}, "adm": {"role": "admin", "user": "adm"}})
     now = {"t": "2026-02-01T10:00:00+00:00"}
-    st = Settings(tmp_path / "data", c.corpus_root() / "world" / "world.sqlite", tokens, max_mb, 7, DOC_TYPES, clock or (lambda: now["t"]))
+    st = Settings(tmp_path / "data", c.corpus_root() / "world" / "world.sqlite", tokens, max_mb, 7, DOC_TYPES, clock or (lambda: now["t"]), ai)
     cl = TestClient(create_app(st))
     cl.now = now
     return cl
@@ -139,9 +139,9 @@ def test_two_applicants_are_isolated(tmp_path):
 
 
 # ----------------------------------------------------------------------------- review: blind double review
-def forged_case(tmp_path):
+def forged_case(tmp_path, ai=None):
     inst, docs = digital_institution(lambda i: "spliced_expiry_forgery" in i["mutations"] and not i["documents_missing"])
-    cl = make_client(tmp_path, [inst])
+    cl = make_client(tmp_path, [inst], ai=ai)
     apply_all(cl, inst, docs)
     r = cl.post("/apply/submit", headers=H(f"app-{inst['inst_id']}"))
     assert r.status_code == 200, r.text
@@ -370,3 +370,73 @@ def test_rule_changer_preview_apply_use_and_restore(tmp_path):
     back = cl.post("/admin/rules/revert", headers=H("adm"), json={"version": 0}).json()
     assert back["version"] == 2 and back["modified"] is False and cl.app.state.pipeline.norms[prog]["students_per_faculty"] == before
     assert [h["kind"] for h in back["history"]] == ["apply", "revert"]
+
+
+# ----------------------------------------------------------------------------- AI assistant (Gemini; a fake transport, never Google)
+def ai_client(*answers):
+    from modules import ai_assist as AI
+    from tests.test_ai_assist import Fake
+    f = Fake(*answers)
+    return AI.GeminiClient("SECRET-KEY-123", post=f), f
+
+
+def test_ai_is_off_without_a_key_and_nothing_else_changes(tmp_path):
+    cl, inst, _ = forged_case(tmp_path)
+    for who in ("adm", "sup", "rev-ana"):
+        assert cl.get("/ai/status", headers=H(who)).json() == {"enabled": False, "model": None, "service": "Google Gemini"}
+    assert cl.get("/ai/status", headers=H(f"app-{inst['inst_id']}")).status_code == 403
+    assert cl.post(f"/review/cases/{inst['inst_id']}/ai-explain", headers=H("sup")).status_code == 503
+    assert cl.post("/admin/rules/ai-upload", headers=H("adm"), files={"file": ("r.pdf", b"%PDF-1.4")}).status_code == 503
+
+
+def test_case_explanation_blind_reviewers_get_no_score_and_results_are_cached_and_audited(tmp_path):
+    ans = {"summary": "A date was covered and replaced.", "most_important": "covered_text", "findings": []}
+    c, f = ai_client(ans, ans, {"summary": "revealed"})
+    cl, inst, _ = forged_case(tmp_path, ai=c)
+    i = inst["inst_id"]
+    url = f"/review/cases/{i}/ai-explain"
+    assert cl.get("/ai/status", headers=H("sup")).json()["enabled"] is True
+    assert cl.post(url, headers=H(f"app-{i}")).status_code == 403                            # an applicant never reaches it
+    assert cl.post(url, headers=H("rev-ana")).status_code == 403                             # an unassigned reviewer neither
+    r = cl.post(url, headers=H("sup")).json()
+    assert r["summary"].startswith("A date") and r["blind"] is False and r["service"] == "Google Gemini" and "does not decide" in r["caveat"]
+    sup_body = json.dumps(f.calls[0]["body"])
+    assert "machine_score" in sup_body and "covered_text" in sup_body and "SECRET-KEY-123" not in sup_body
+    assert cl.post(url, headers=H("sup")).json()["cached"] is True and len(f.calls) == 1        # no second paid call for the same case
+    cl.post(f"/review/cases/{i}/assign", headers=H("sup"))
+    who = next(u for u in ("ana", "ben", "chi", "dev") if cl.get("/review/my-cases", headers=H(f"rev-{u}")).json())
+    rb = cl.post(url, headers=H(f"rev-{who}")).json()
+    assert rb["blind"] is True and len(f.calls) == 2
+    blind_body = json.dumps(f.calls[1]["body"])
+    assert not any(w in blind_body for w in ("machine_score", "high_anomaly", "rules_failed", '\\"kind\\"', '\\"p\\"')) and "covered_text" in blind_body
+    assert cl.get("/admin/audit/verify", headers=H("adm")).json()["intact"] is True
+
+
+def test_a_failing_ai_service_gives_a_plain_502_not_a_crash(tmp_path):
+    c, _ = ai_client(RuntimeError("down"))
+    cl, inst, _ = forged_case(tmp_path, ai=c)
+    r = cl.post(f"/review/cases/{inst['inst_id']}/ai-explain", headers=H("sup"))
+    assert r.status_code == 502 and "could not be reached" in r.json()["detail"] and "SECRET" not in r.text
+
+
+def test_ai_rule_import_takes_the_same_preview_and_confirmation_path(tmp_path):
+    from tests.test_ai_assist import PROSE, make_pdf
+    rows = {"norms_version": "Handbook 2027", "norm_rows": [{"programme_type": "engineering", "norm": "students_per_faculty", "value": 18, "clause": "3.4", "quote": "one teacher for every eighteen students"}],
+            "rule_rows": [], "notes": ""}
+    c, f = ai_client(rows, {"summary": "Engineering may have fewer faculty.", "watch_out": ["Loosens a check"]})
+    cl = make_client(tmp_path, [], ai=c)
+    prose = make_pdf(PROSE)
+    plain = cl.post("/admin/rules/upload", headers=H("adm"), files={"file": ("h.pdf", prose)})
+    assert plain.status_code == 422 and "Read it with AI" in plain.json()["detail"]                       # the table reader still refuses prose
+    assert cl.post("/admin/rules/ai-upload", headers=H("sup"), files={"file": ("h.pdf", prose)}).status_code == 403
+    pre = cl.post("/admin/rules/ai-upload", headers=H("adm"), files={"file": ("handbook.pdf", prose)}).json()
+    assert pre["ai"] is True and pre["changes"][0]["quote"].startswith("one teacher") and "students_per_faculty: 18" in pre["yaml"]
+    assert pre["warnings"][0].startswith("These changes were read") and any("AI model" in n["why"] for n in pre["needs_ack"])
+    assert cl.get("/admin/rules", headers=H("adm")).json()["version"] == 0                               # reading is not applying
+    assert cl.post("/admin/rules/apply", headers=H("adm"), json={"id": pre["id"]}).status_code == 409    # an AI-read plan always needs the explicit yes
+    ex = cl.post("/admin/rules/ai-explain", headers=H("adm"), json={"id": pre["id"]}).json()
+    assert ex["summary"].startswith("Engineering") and ex["watch_out"] == ["Loosens a check"] and ex["service"] == "Google Gemini"
+    assert cl.post("/admin/rules/ai-explain", headers=H("adm"), json={"id": "deadbeef"}).status_code == 404
+    done = cl.post("/admin/rules/apply", headers=H("adm"), json={"id": pre["id"], "acknowledge": True})
+    assert done.status_code == 200 and cl.app.state.pipeline.norms["engineering"]["students_per_faculty"] == 18
+    assert cl.get("/admin/audit/verify", headers=H("adm")).json()["intact"] is True

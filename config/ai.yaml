@@ -1,0 +1,10 @@
+# Gemini assistant settings. The API key is NEVER stored here: set the environment variable GEMINI_API_KEY (and optionally GEMINI_MODEL).
+# Without a key every AI feature is simply off and the rest of the system works as before.
+model: gemini-2.5-flash          # override with GEMINI_MODEL; check the current model names in Google AI Studio
+endpoint: https://generativelanguage.googleapis.com/v1beta
+timeout_s: 60
+temperature: 0.2
+max_findings: 40                 # findings sent per explanation
+max_evidence_chars: 500          # per finding
+max_input_chars: 60000           # of a rule document's text
+max_pdf_mb: 8                    # a rule PDF with no text layer is sent as the PDF itself, up to this size

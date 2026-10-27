@@ -11,6 +11,15 @@ $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { throw "The Python environment .venv was not found next to this script. See DEMO.md, section 'First time on a new computer'." }
 if (-not (Test-Path (Join-Path $root "frontend\node_modules"))) { throw "Run 'npm install' inside the frontend folder first (DEMO.md)." }
 
+# optional AI help: a line GEMINI_API_KEY=... in a file named .env next to this script (git ignores it); the key is never printed
+$envFile = Join-Path $root ".env"
+if (Test-Path $envFile) {
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*(GEMINI_API_KEY|GEMINI_MODEL)\s*=\s*(.+?)\s*$') { Set-Item -Path ("Env:" + $Matches[1]) -Value $Matches[2].Trim('"').Trim("'") }
+    }
+}
+if ($env:GEMINI_API_KEY) { Write-Host "AI help: on (Gemini key found)" } else { Write-Host "AI help: off (no GEMINI_API_KEY; see DEMO.md)" }
+
 $keepArg = if ($Keep) { " --keep" } else { "" }
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle='SIH26261 API'; Set-Location '$root'; & '$py' -m harness.demo --port 8000$keepArg"
 

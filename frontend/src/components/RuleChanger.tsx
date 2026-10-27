@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, Download, FileUp, History, Loader2, Pencil, RotateCcw, ScrollText, TriangleAlert } from "lucide-react";
-import { api, blob, jsonBody, upload, type RuleChange, type RulePreview, type RulesState } from "@/lib/api";
+import { ArrowDown, ArrowUp, CheckCircle2, Download, FileUp, History, Loader2, Pencil, RotateCcw, ScrollText, Sparkles, TriangleAlert } from "lucide-react";
+import { api, ApiError, blob, jsonBody, upload, type AiPlanExplanation, type AiStatus, type RuleChange, type RulePreview, type RulesState } from "@/lib/api";
 import { errorText } from "@/lib/auth";
 
 const show = (v: unknown) => (v === null || v === undefined || v === "TODO" ? "—" : typeof v === "boolean" ? (v ? "on" : "off") : String(v));
@@ -30,9 +30,14 @@ export function RuleChanger() {
   const [ack, setAck] = useState(false);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [aiExplain, setAiExplain] = useState<AiPlanExplanation | null>(null);
+  const [unstructured, setUnstructured] = useState(false);
 
   const load = useCallback(() => api<RulesState>("/admin/rules").then(setState).catch((e) => setError(errorText(e))), []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { api<AiStatus>("/ai/status").then(setAiStatus).catch(() => setAiStatus(null)); }, []);
 
   async function run(key: string, f: () => Promise<void>) {
     setBusy(key); setError(null); setNotice(null);
@@ -40,10 +45,16 @@ export function RuleChanger() {
   }
 
   const template = () => run("tpl", async () => saveBlob(await blob("/admin/rules/template.pdf"), "rule_update_template.pdf"));
-  const choose = (file?: File) => file && run("up", async () => {
-    setPreview(null); setAck(false);
-    setPreview(await upload<RulePreview>("/admin/rules/upload", file, file.name, "POST"));
+  const choose = (f?: File) => f && run("up", async () => {
+    setPreview(null); setAck(false); setAiExplain(null); setUnstructured(false); setFile(f);
+    try { setPreview(await upload<RulePreview>("/admin/rules/upload", f, f.name, "POST")); }
+    catch (e) { if (e instanceof ApiError && e.status === 422 && /Read it with AI/.test(e.message)) setUnstructured(true); throw e; }
   });
+  const readWithAi = () => file && run("ai", async () => {
+    setPreview(null); setAck(false); setAiExplain(null); setUnstructured(false);
+    setPreview(await upload<RulePreview>("/admin/rules/ai-upload", file, file.name, "POST"));
+  });
+  const explainWithAi = () => preview && run("aiexp", async () => { setAiExplain(await api<AiPlanExplanation>("/admin/rules/ai-explain", jsonBody({ id: preview.id }))); });
   const apply = () => preview && run("apply", async () => {
     const s = await api<RulesState>("/admin/rules/apply", jsonBody({ id: preview.id, acknowledge: ack }));
     setState(s); setPreview(null); setNotice(`Rules updated. Version ${s.version} is now in force for every new case.`);
@@ -72,6 +83,16 @@ export function RuleChanger() {
       )}
       {notice && <p role="status" className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"><CheckCircle2 aria-hidden className="h-4 w-4" /> {notice}</p>}
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {unstructured && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+          {aiStatus?.enabled ? (
+            <>
+              <span>This looks like a prose document. {aiStatus.service} can read it and propose the changes; you still see and confirm every value.</span>
+              <button className="btn-primary" onClick={readWithAi} disabled={busy !== null}>{busy === "ai" ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden className="h-4 w-4" />} Read it with AI</button>
+            </>
+          ) : <span className="text-ink-soft">Reading prose documents needs the AI helper, which is not set up on this server (it needs a Gemini API key).</span>}
+        </div>
+      )}
 
       <ol className="space-y-3 text-sm">
         <li className="flex flex-wrap items-center gap-3">
@@ -93,7 +114,8 @@ export function RuleChanger() {
 
       {preview && (
         <div className="space-y-3 rounded-lg border border-slate-200 p-4" role="region" aria-label="Preview of the changes">
-          <h3 className="font-semibold">Preview: {preview.source.name}</h3>
+          <h3 className="flex flex-wrap items-center gap-2 font-semibold">Preview: {preview.source.name}{preview.ai && <span className="pill bg-brand-light text-brand-dark"><Sparkles aria-hidden className="mr-1 inline h-3 w-3" />read by AI: check each value</span>}</h3>
+          {preview.ai_notes && <p className="text-sm text-ink-soft">AI notes: {preview.ai_notes}</p>}
           <p className="text-sm">
             {preview.changes.length === 0 ? "Nothing in this file differs from the rules in force." :
               <><strong>{preview.counts.increase}</strong> increased, <strong>{preview.counts.decrease}</strong> decreased, <strong>{preview.counts.changed}</strong> other</>}
@@ -109,7 +131,7 @@ export function RuleChanger() {
                 <tbody>
                   {preview.changes.map((c, i) => (
                     <tr key={i} className="border-b border-slate-100 last:border-0 align-top">
-                      <th scope="row" className="py-1 pr-3 font-normal">{c.label}{c.needs_ack.length > 0 && <span className="pill ml-2 bg-amber-100 text-amber-900">confirm</span>}</th>
+                      <th scope="row" className="py-1 pr-3 font-normal">{c.label}{c.needs_ack.length > 0 && <span className="pill ml-2 bg-amber-100 text-amber-900">confirm</span>}{c.quote && <blockquote className="mt-1 border-l-2 border-slate-300 pl-2 text-xs italic text-ink-soft">&ldquo;{c.quote}&rdquo;</blockquote>}</th>
                       <td className="pr-3 tabular-nums text-ink-soft">{show(c.old)}</td><td className="pr-3 font-medium tabular-nums">{show(c.new)}</td>
                       <td className="pr-3"><Change c={c} /></td><td className="text-ink-soft">{c.ref || "—"}</td>
                     </tr>
@@ -123,6 +145,27 @@ export function RuleChanger() {
             <details open className="text-sm">
               <summary className="cursor-pointer font-medium text-red-800">Rows not used ({preview.rejected.length})</summary>
               <ul className="mt-1 space-y-1">{preview.rejected.map((r, i) => <li key={i}><span className="text-ink-faint">page {r.page}:</span> <code className="rounded bg-slate-100 px-1">{r.row}</code> — {r.reason}</li>)}</ul>
+            </details>
+          )}
+
+          {aiStatus?.enabled && preview.changes.length > 0 && (
+            <div className="space-y-2">
+              <button className="btn-secondary" onClick={explainWithAi} disabled={busy !== null}>{busy === "aiexp" ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden className="h-4 w-4" />} Explain these changes in plain words</button>
+              {aiExplain && (
+                <div className="rounded-lg bg-brand-light p-3 text-sm text-brand-dark" aria-live="polite">
+                  <p>{aiExplain.summary}</p>
+                  {aiExplain.watch_out.length > 0 && <ul className="mt-1 list-disc pl-5">{aiExplain.watch_out.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+                  <p className="mt-1 text-xs opacity-80">{aiExplain.caveat} Sent to {aiExplain.service} ({aiExplain.model}).</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {preview.yaml && (
+            <details className="text-sm">
+              <summary className="cursor-pointer font-medium text-brand">Show the resulting rule settings as YAML</summary>
+              <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{preview.yaml}</pre>
+              <p className="mt-1 text-xs text-ink-faint">This is the overrides file that Apply would store. The shipped rule files are not edited; Restore undoes it.</p>
             </details>
           )}
 

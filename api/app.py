@@ -37,7 +37,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from api.store import Store
-from modules import adapters, diff as diff_mod, perspective, pipeline as PL, review as R, rule_import as RI, rules as rules_mod, ttl_purge
+from modules import adapters, ai_assist as AI, diff as diff_mod, perspective, pipeline as PL, review as R, rule_import as RI, rules as rules_mod, ttl_purge
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,6 +55,7 @@ class Settings:
     rng_seed: int = 26261
     doc_types: list = field(default_factory=list)
     clock: Callable[[], str] = _now
+    ai: object = "env"            # "env" = Gemini client from GEMINI_API_KEY (or off without it); None = off; or an injected client (tests)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -80,6 +81,10 @@ class DecisionIn(BaseModel):
 class RuleApplyIn(BaseModel):
     id: str
     acknowledge: bool = False
+
+
+class RuleIdIn(BaseModel):
+    id: str
 
 
 class RuleRevertIn(BaseModel):
@@ -466,6 +471,39 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         n = store.conn.execute("select count(*) from audit_log").fetchone()[0]
         return {"intact": ok, "first_bad_seq": bad, "entries": n}
 
+    # ------------------------------------------------------------------ AI assistant (optional, off without a key)
+    ai = AI.GeminiClient.from_env() if st.ai == "env" else st.ai
+    ai_cache: dict = {}
+
+    def need_ai():
+        if ai is None:
+            raise HTTPException(503, "AI help is not set up on this server (no GEMINI_API_KEY)")
+        return ai
+
+    @app.get("/ai/status")
+    def ai_status(p: dict = Depends(need("reviewer", "supervisor", "admin"))):
+        return {"enabled": ai is not None, "model": getattr(ai, "model", None), "service": "Google Gemini"}
+
+    @app.post("/review/cases/{inst}/ai-explain")
+    def ai_explain(inst: str, p: dict = Depends(staff)):
+        client = need_ai()
+        a, res, rv = case_for(inst)
+        blind = False
+        if p["role"] == "reviewer":
+            if p["user"] not in rv["assigned"]:
+                raise HTTPException(403, "this case is not assigned to you")
+            blind = not R.revealed(rv, p["user"])             # a blind reviewer's explanation is built without score or probabilities
+        key = (inst, a["round"], blind)
+        if key in ai_cache:
+            return {**ai_cache[key], "cached": True}
+        summary = AI.case_summary(res["app"], res["findings"], None if blind else res["score"], [r for r in res["rules"] if r.get("result") == "fail"], blind)
+        out = AI.explain_case(client, summary)
+        store.log({"event": "ai_used", "feature": "explain_case", "inst_id": inst, "blind": blind, "model": client.model, "ok": out["ok"], "by": p["user"], "at": st.clock()})
+        if not out["ok"]:
+            raise HTTPException(502, out["error"])
+        ai_cache[key] = {**out, "service": "Google Gemini", "blind": blind}
+        return ai_cache[key]
+
     # ------------------------------------------------------------------ /admin/rules (rule changer)
     def rules_state() -> dict:
         ov = rstore.current()
@@ -503,8 +541,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             parsed = RI.read_pdf(raw)
         except RI.RuleImportError as exc:
             raise HTTPException(422, str(exc))
+        plan = RI.build_plan(parsed, base_rb, base_nd, rstore.current(), {"name": Path(file.filename or "rules.pdf").name, "sha256": hashlib.sha256(raw).hexdigest()})
+        return stage_preview(plan, raw, p)
+
+    def stage_preview(plan: dict, raw: bytes, p: dict) -> dict:
+        """Impact on stored cases, stage the plan (nothing applies yet), audit, and return it without the overrides document."""
         cur = rstore.current()
-        plan = RI.build_plan(parsed, base_rb, base_nd, cur, {"name": Path(file.filename or "rules.pdf").name, "sha256": hashlib.sha256(raw).hexdigest()})
         results = {a["inst_id"]: r for a in store.all_apps() if (r := store.get_result(a["inst_id"])) is not None}
         try:
             impact = PL.rule_change_impact(results, RI.effective(base_rb, base_nd, cur), RI.effective(base_rb, base_nd, plan["new_overrides"])) if plan["changes"] else None
@@ -512,8 +554,40 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             impact = None                                                    # a preview must not fail because the what-if could not run
         plan["impact"] = impact
         sid = rstore.stage(plan, raw, st.clock())
-        store.log({"event": "rules_previewed", "id": sid, "file": plan["source"]["name"], "sha256": plan["source"]["sha256"], "n_changes": len(plan["changes"]), "by": p["user"], "at": st.clock()})
+        store.log({"event": "rules_previewed", "id": sid, "file": plan["source"]["name"], "sha256": plan["source"]["sha256"], "n_changes": len(plan["changes"]), "ai": bool(plan.get("ai")), "by": p["user"], "at": st.clock()})
         return {**{k: v for k, v in plan.items() if k != "new_overrides"}, "id": sid, "based_on_version": rstore.version()}
+
+    @app.post("/admin/rules/ai-upload")
+    async def rules_ai_upload(file: UploadFile = File(...), p: dict = Depends(admin)):
+        """An unstructured rule document (prose handbook, scan): the AI turns it into table rows, which then take the normal path."""
+        client = need_ai()
+        raw = await file.read(st.max_upload_mb * 1024 * 1024 + 1)
+        if len(raw) > st.max_upload_mb * 1024 * 1024:
+            raise HTTPException(413, f"the file is larger than {st.max_upload_mb} MB")
+        if not raw.startswith(b"%PDF"):
+            raise HTTPException(422, "this is not a PDF file")
+        rb_now, norms_now = RI.effective(base_rb, base_nd, rstore.current())
+        got = AI.rules_from_document(client, raw, norms_now, base_rb["rules"])
+        store.log({"event": "ai_used", "feature": "rules_from_document", "model": client.model, "ok": got["ok"], "by": p["user"], "at": st.clock()})
+        if not got["ok"]:
+            raise HTTPException(422, got["error"])
+        plan = RI.build_plan(got["parsed"], base_rb, base_nd, rstore.current(), {"name": Path(file.filename or "rules.pdf").name, "sha256": hashlib.sha256(raw).hexdigest(), "ai": True})
+        plan["ai"], plan["ai_notes"] = True, got["notes"]
+        plan["warnings"].insert(0, "These changes were read from the document by an AI model (Google Gemini). Check every value against the quoted sentence before applying.")
+        plan["needs_ack"].append({"label": "Every change in this list", "why": "was read from the document by an AI model, so it needs your check against the quoted source"})
+        return stage_preview(plan, raw, p)
+
+    @app.post("/admin/rules/ai-explain")
+    def rules_ai_explain(body: RuleIdIn, p: dict = Depends(admin)):
+        client = need_ai()
+        plan = rstore.staged(body.id)
+        if plan is None:
+            raise HTTPException(404, "this preview no longer exists; upload the file again")
+        out = AI.explain_plan(client, plan)
+        store.log({"event": "ai_used", "feature": "explain_rule_changes", "model": client.model, "ok": out["ok"], "by": p["user"], "at": st.clock()})
+        if not out["ok"]:
+            raise HTTPException(502, out["error"])
+        return {**out, "service": "Google Gemini"}
 
     @app.post("/admin/rules/apply")
     def rules_apply(body: RuleApplyIn, p: dict = Depends(admin)):

@@ -118,7 +118,7 @@ def read_pdf(path: str | Path | bytes) -> dict:
         doc.close()
     if not norm_rows and not rule_rows:
         raise RuleImportError("no rule tables were found. This tool reads PDFs laid out as the template (a Norms table and/or a Rules table with "
-                              "their header rows). A prose or scanned handbook is an unstructured document: that needs the AI import, which is not available yet.")
+                              "their header rows). A prose or scanned handbook is an unstructured document: use \"Read it with AI\" in the rules tool (it needs the Gemini key to be set up).")
     return {"meta": meta, "norm_rows": norm_rows, "rule_rows": rule_rows}
 
 
@@ -255,7 +255,7 @@ def build_plan(parsed: dict, base_rulebook: dict, base_norms_doc: dict, current:
         pct = _pct(old, val)
         ack = [f"moves by {pct:+.0f}% (more than {LARGE_CHANGE_PCT:.0f}%)"] if pct is not None and abs(pct) >= LARGE_CHANGE_PCT else []
         changes.append({"target": "norm", "programme_type": prog, "key": norm, "label": f"{prog}: {norm.replace('_', ' ')}", "old": old, "new": val,
-                        "direction": _direction(old, val), "pct": pct, "ref": r["ref"], "page": r["page"], "needs_ack": ack})
+                        "direction": _direction(old, val), "pct": pct, "ref": r["ref"], "page": r["page"], "quote": r.get("quote", ""), "needs_ack": ack})
         if val == base_norms[prog][norm]:
             new["norms"].get(prog, {}).pop(norm, None)
         else:
@@ -294,7 +294,7 @@ def build_plan(parsed: dict, base_rulebook: dict, base_norms_doc: dict, current:
             if setting == "p" and pct is not None and abs(pct) >= LARGE_CHANGE_PCT:
                 ack.append(f"moves by {pct:+.0f}% (more than {LARGE_CHANGE_PCT:.0f}%)")
             changes.append({"target": "rule", "rule": rid, "key": setting, "label": f"{rid} {shipped['name'].replace('_', ' ')}: {setting.replace('_', ' ')}",
-                            "old": old, "new": val, "direction": _direction(old, val), "pct": pct, "ref": ref, "page": r["page"], "needs_ack": ack})
+                            "old": old, "new": val, "direction": _direction(old, val), "pct": pct, "ref": ref, "page": r["page"], "quote": r.get("quote", ""), "needs_ack": ack})
             o = new["rules"].setdefault(rid, {})
             if val == (True if setting == "enabled" else shipped.get(setting)):
                 o.pop(setting, None)
@@ -303,7 +303,7 @@ def build_plan(parsed: dict, base_rulebook: dict, base_norms_doc: dict, current:
         if ref and setting != "handbook_ref" and merged.get("handbook_ref") != ref and rid not in ref_done:
             ref_done.add(rid)
             changes.append({"target": "rule", "rule": rid, "key": "handbook_ref", "label": f"{rid} {shipped['name'].replace('_', ' ')}: handbook ref",
-                            "old": merged.get("handbook_ref"), "new": ref, "direction": "changed", "pct": None, "ref": ref, "page": r["page"], "needs_ack": []})
+                            "old": merged.get("handbook_ref"), "new": ref, "direction": "changed", "pct": None, "ref": ref, "page": r["page"], "quote": r.get("quote", ""), "needs_ack": []})
             new["rules"].setdefault(rid, {})["handbook_ref"] = ref
     new["rules"] = {k: v for k, v in new["rules"].items() if v}
     new["norms"] = {k: v for k, v in new["norms"].items() if v}
@@ -320,6 +320,7 @@ def build_plan(parsed: dict, base_rulebook: dict, base_norms_doc: dict, current:
     pct_changed = {"increase": sum(c["direction"] == "increase" for c in changes), "decrease": sum(c["direction"] == "decrease" for c in changes),
                    "changed": sum(c["direction"] == "changed" for c in changes)}
     return {"meta": meta, "changes": changes, "rejected": rejected, "warnings": warnings, "unchanged": unchanged, "counts": pct_changed,
+            "yaml": yaml.safe_dump(new, sort_keys=False, allow_unicode=True),
             "needs_ack": [{"label": c["label"], "why": w} for c in changes for w in c["needs_ack"]], "new_overrides": new, "source": source or {}}
 
 

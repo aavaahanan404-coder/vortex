@@ -2,9 +2,10 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, EyeOff, Gavel, GitCompare, Loader2, ShieldAlert } from "lucide-react";
-import { api, ApiError, blob, DOC_LABEL, jsonBody, type CaseDoc, type Finding, type PageSize, type ReviewerCase, type SupervisorCase } from "@/lib/api";
+import { api, ApiError, blob, DOC_LABEL, jsonBody, type AiCaseExplanation, type CaseDoc, type Finding, type PageSize, type ReviewerCase, type SupervisorCase } from "@/lib/api";
 import { errorText, useRequireRole } from "@/lib/auth";
 import { PageViewer, type Box } from "@/components/PageViewer";
+import { AiExplain } from "@/components/AiExplain";
 
 interface TextChange { page: number; op: string; old: string; new: string; old_bbox: number[] | null; new_bbox: number[] | null }
 interface DiffReport {
@@ -26,6 +27,7 @@ export default function CasePage({ params }: { params: Promise<{ inst: string }>
   const [rc, setRc] = useState<ReviewerCase | null>(null);
   const [sc, setSc] = useState<SupervisorCase | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ai, setAi] = useState<AiCaseExplanation | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -64,7 +66,9 @@ export default function CasePage({ params }: { params: Promise<{ inst: string }>
       {sc && <SupervisorSummary sc={sc} />}
       {rc && !blind && rc.score !== null && <RevealedSummary rc={rc} />}
 
-      <Viewer inst={inst} documents={documents} findings={findings} />
+      <AiExplain inst={inst} blind={blind} onResult={setAi} />
+
+      <Viewer inst={inst} documents={documents} findings={findings} aiNotes={Object.fromEntries((ai?.findings ?? []).map((f) => [f.id, f]))} />
 
       {rc && <DecisionPanel inst={inst} rc={rc} onDone={load} />}
       {sc && <SupervisorRules sc={sc} />}
@@ -150,7 +154,7 @@ function boxOf(f: Finding): Box | null {
   return { page: b[0], x: b[1], y: b[2], w: b[3], h: b[4], id: `${f.id}:${f.doc_id}:${b.join(",")}` };
 }
 
-function Viewer({ inst, documents, findings }: { inst: string; documents: CaseDoc[]; findings: Finding[] }) {
+function Viewer({ inst, documents, findings, aiNotes }: { inst: string; documents: CaseDoc[]; findings: Finding[]; aiNotes: Record<string, { meaning: string; what_to_check: string }> }) {
   const [docType, setDocType] = useState(documents[0]?.doc_type ?? "");
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<string | null>(null);
@@ -214,6 +218,11 @@ function Viewer({ inst, documents, findings }: { inst: string; documents: CaseDo
                         <span className="mt-1 block">{f.message}</span>
                         {f.tier === 4 && <span className="mt-1 block text-xs text-amber-800">Image-based signal: a pointer for you to look at, never proof by itself.</span>}
                       </button>
+                      {aiNotes[f.id] && (
+                        <div className="mt-1 rounded-lg bg-brand-light p-2 text-xs text-brand-dark" aria-label={`AI note on ${f.id}`}>
+                          <strong>AI:</strong> {aiNotes[f.id].meaning} {aiNotes[f.id].what_to_check && <><br /><strong>Check:</strong> {aiNotes[f.id].what_to_check}</>}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

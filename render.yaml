@@ -6,3 +6,6 @@ services:
     plan: free              # 512 MB; if the service is killed for memory (reading scans uses the most), change to "starter"
     healthCheckPath: /backend/health
     autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY      # optional: paste your Gemini key in the Render dashboard to switch the AI help on
+        sync: false

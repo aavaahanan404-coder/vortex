@@ -109,7 +109,7 @@ export const DOC_TYPES: { type: string; label: string; required: boolean; hint: 
 export const DOC_LABEL: Record<string, string> = Object.fromEntries(DOC_TYPES.map((d) => [d.type, d.label]));
 
 // ---- rule changer (/admin/rules)
-export interface RuleChange { target: "norm" | "rule"; label: string; key: string; old: unknown; new: unknown; direction: "increase" | "decrease" | "changed"; pct: number | null; ref: string; page: number; needs_ack: string[] }
+export interface RuleChange { target: "norm" | "rule"; label: string; key: string; old: unknown; new: unknown; direction: "increase" | "decrease" | "changed"; pct: number | null; ref: string; page: number; needs_ack: string[]; quote?: string }
 export interface RuleHistory { version: number; kind: "apply" | "revert"; at: string; by: string; source_name?: string | null; n_changes?: number; restored?: number }
 export interface RulesState {
   version: number; modified: boolean; norms_version: string | null; norms_validated: boolean;
@@ -120,6 +120,11 @@ export interface RulesState {
 export interface RulePreview {
   id: string; based_on_version: number; meta: Record<string, unknown>; changes: RuleChange[]; unchanged: number; warnings: string[];
   rejected: { page: number; row: string; reason: string }[]; counts: { increase: number; decrease: number; changed: number };
-  needs_ack: { label: string; why: string }[]; source: { name?: string };
+  needs_ack: { label: string; why: string }[]; source: { name?: string }; ai?: boolean; ai_notes?: string; yaml?: string;
   impact: { cases_checked: number; rule_changes: Record<string, Record<string, number>>; category_changes: { inst_id: string; old: string; new: string }[]; score_changes: number } | null;
 }
+
+// ---- AI assistant (Gemini; off unless the server has a key)
+export interface AiStatus { enabled: boolean; model: string | null; service: string }
+export interface AiCaseExplanation { summary: string; most_important: string; findings: { id: string; meaning: string; what_to_check: string }[]; caveat: string; model: string; blind: boolean; cached?: boolean; service: string }
+export interface AiPlanExplanation { summary: string; watch_out: string[]; caveat: string; model: string; service: string }
