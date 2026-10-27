@@ -1,0 +1,5 @@
+# qr_verify settings. Decision 3 (Batch A review): a digital PDF of a QR-bearing document type that
+# carries no QR is suspicious in its own right (soft, p about 0.5); an undecodable QR on a scan
+# stays qr_absent (soft, applicant fixable).
+qr_required_doc_types: [building_plan, fire_cert, eoa]
+p_qr_missing_on_digital: 0.5

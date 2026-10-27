@@ -1,0 +1,205 @@
+# Rulebook v1 for the rules module. Expressions are evaluated by simpleeval over the canonical facts (modules/rules.py build_facts)
+# with a whitelist of functions; no builtins, no attribute access to anything private.
+#
+# IMPORTANT: handbook_ref is TODO for every rule (the draft rulebook shipped with the corpus has no clause mapping) and the
+# norms in config/norms.yaml are ILLUSTRATIVE. Until a regulator fills both in, norm-based rules (R001-R003, R006) are
+# `soft`: a human confirms. Registry / certificate based rules are `hard` (a deterministic mismatch with an issuer record).
+rulebook_version: v1-draft
+norms_validated: false
+required_documents: [society_reg, land_doc, building_plan, fire_cert, aff_letter, faculty_list, infra_statement, financial, affidavit]
+max_expression_chars: 600
+# R008: names are compared after expanding these abbreviations, and are "the same" when equal or >= name_similarity alike
+name_similarity: 0.85          # of the distinctive (non-generic) words only
+generic_name_words: [of, and, the, in, for, institute, institution, college, school, university, polytechnic, engineering, technology,
+                     management, studies, science, sciences, business, education, educational, society, trust, foundation, academy]
+abbreviations: {inst: institute, coll: college, engg: engineering, eng: engineering, tech: technology, mgmt: management,
+                univ: university, poly: polytechnic, sci: science, assoc: association, edu: educational, soc: society}
+
+# named expressions, evaluated in order before the rules (a derived value that cannot be computed is None)
+derived:
+  total_intake: "sum([c.intake for c in applied]) if len(applied) > 0 else None"
+  required_faculty: "ceil(total_intake / norms.students_per_faculty)"
+  required_builtup: "norms.builtup_sqm_per_60_intake * total_intake / 60"
+  required_pcs: "ceil(total_intake * norms.pcs_per_intake_seat)"
+  name_mismatches: "[d for d in institution_names if not similar(institution_names[d], registry.institution.name)] + [d for d in society_names if not similar(society_names[d], registry.society.name)]"
+  faculty_elsewhere: "[f for f in faculty_ids if registry.faculty_employment[f] != application.inst_id]"
+  over_affiliation: "[c.course for c in applied if (c.course not in registry.affiliations) or c.intake > registry.affiliations[c.course]]"
+  missing_docs: "[d for d in required_docs if d not in submitted_docs]"
+
+rules:
+  - id: R001
+    name: faculty_student_ratio
+    tier: 3
+    severity: major
+    kind: soft
+    p: 0.7
+    handbook_ref: TODO
+    requires: [faculty_count, total_intake]
+    expr: "faculty_count >= required_faculty"
+    detail: "'faculty %d vs required %d' % (faculty_count, required_faculty)"
+    message: "The number of faculty listed is below what the intake needs ({detail})."
+  - id: R002
+    name: builtup_area_sufficient
+    tier: 3
+    severity: major
+    kind: soft
+    p: 0.7
+    handbook_ref: TODO
+    requires: [infra.total, total_intake]
+    expr: "infra.total >= required_builtup"
+    detail: "'built-up %d vs required %d' % (infra.total, required_builtup)"
+    message: "The built-up area is below what the intake needs ({detail})."
+  - id: R003
+    name: pc_to_student_ratio
+    tier: 3
+    severity: major
+    kind: soft
+    p: 0.7
+    handbook_ref: TODO
+    requires: [infra.pcs, total_intake]
+    expr: "infra.pcs >= required_pcs"
+    detail: "'pcs %d vs required %d' % (infra.pcs, required_pcs)"
+    message: "The number of computers is below what the intake needs ({detail})."
+  - id: R004
+    name: fire_certificate_valid
+    tier: 2
+    severity: major
+    kind: hard
+    p: 0.85
+    handbook_ref: TODO
+    requires: [fire.valid_to, application.date]
+    expr: "fire.valid_to >= application.date"
+    detail: "'fire valid_to %s vs application %s' % (fire.valid_to, application.date)"
+    message: "The fire safety certificate is not valid on the application date ({detail})."
+  - id: R005
+    name: building_plan_valid
+    tier: 2
+    severity: major
+    kind: hard
+    p: 0.85
+    handbook_ref: TODO
+    requires: [building.valid_to, application.date]
+    expr: "building.valid_to >= application.date"
+    detail: "'building valid_to %s vs application %s' % (building.valid_to, application.date)"
+    message: "The building plan approval is not valid on the application date ({detail})."
+  - id: R006
+    name: lease_tenure_minimum
+    tier: 3
+    severity: major
+    kind: soft
+    p: 0.7
+    handbook_ref: TODO
+    applies_if: "land.tenure == 'lease'"
+    requires: [land.lease_years]
+    expr: "land.lease_years >= norms.min_lease_years"
+    detail: "'lease %dy' % land.lease_years"
+    message: "The land lease is shorter than the minimum ({detail})."
+  - id: R007
+    name: intake_within_affiliation
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [registry.affiliations, applied]
+    expr: "len(over_affiliation) == 0"
+    detail: "','.join(over_affiliation)"
+    message: "The applied intake is above the university's approval for: {detail}."
+  - id: R008
+    name: name_consistency
+    tier: 3
+    severity: major
+    kind: soft
+    p: 0.7
+    handbook_ref: TODO
+    requires: [registry.institution, registry.society]
+    expr: "len(name_mismatches) == 0"
+    detail: "','.join(name_mismatches)"
+    message: "The institution or society name on these documents differs from the registry: {detail}."
+  - id: R009
+    name: land_area_matches_registry
+    tier: 2
+    severity: major
+    kind: hard
+    p: 0.85
+    handbook_ref: TODO
+    requires: [land.area_acres, registry.land]
+    expr: "(not exists(registry.land)) or abs(land.area_acres - registry.land.area_acres) < 0.005"
+    detail: "'area %s vs registry %s' % (land.area_acres, registry.land.area_acres)"
+    message: "The land area printed on the deed differs from the land registry ({detail})."
+  - id: R010
+    name: mandatory_documents_present
+    tier: 3
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    expr: "len(missing_docs) == 0"
+    detail: "','.join(missing_docs)"
+    message: "Mandatory document(s) missing: {detail}."
+  - id: R011
+    name: faculty_single_employment
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [faculty_ids, registry.faculty_employment]
+    expr: "len(faculty_elsewhere) == 0"
+    detail: "','.join(faculty_elsewhere)"
+    message: "Faculty listed here are registered as employed elsewhere: {detail}."
+  - id: R012
+    name: land_parcel_ownership
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [registry.land]
+    expr: "(not exists(registry.land)) or registry.land.holder_inst_id == application.inst_id"
+    detail: "'parcel held by %s' % registry.land.holder_inst_id"
+    message: "The land parcel is registered to another institution ({detail})."
+  - id: R013
+    name: certificate_exists_in_registry
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [registry.fire, registry.building]
+    expr: "exists(registry.fire) and exists(registry.building)"
+    detail: "'fire certificate found: %s, building approval found: %s' % (exists(registry.fire), exists(registry.building))"
+    message: "A certificate is not in the issuing registry ({detail})."
+  - id: R014
+    name: financial_arithmetic
+    tier: 3
+    severity: major
+    kind: hard
+    p: 0.85
+    handbook_ref: TODO
+    requires: [fin.income, fin.expenditure, fin.surplus]
+    expr: "fin.surplus == fin.income - fin.expenditure"
+    detail: "'surplus %d vs income - expenditure %d' % (fin.surplus, fin.income - fin.expenditure)"
+    message: "The audited surplus does not equal income minus expenditure ({detail})."
+  - id: R015
+    name: certificate_issued_to_applicant
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [registry.fire]
+    expr: "(not exists(registry.fire)) or registry.fire.inst_id == application.inst_id"
+    detail: "'certificate issued to another institution'"
+    message: "The fire certificate was issued to another institution."
+  - id: R016
+    name: printed_matches_registry
+    tier: 2
+    severity: critical
+    kind: hard
+    p: 0.9
+    handbook_ref: TODO
+    requires: [fire.valid_to, registry.fire, registry.building]
+    expr: "((not exists(registry.fire)) or fire.valid_to == registry.fire.valid_to) and ((not exists(registry.building)) or building.valid_to == registry.building.valid_to)"
+    detail: "'fire.valid_to' if (exists(registry.fire) and fire.valid_to != registry.fire.valid_to) else 'building.valid_to'"
+    message: "The validity date printed on a certificate differs from the issuing registry ({detail})."

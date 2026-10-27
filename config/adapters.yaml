@@ -1,0 +1,26 @@
+# adapters settings: retry policy and which registry each document type is verified against.
+retry:
+  max_attempts: 4            # first call + 3 retries
+  base_delay_s: 0.5          # delays 0.5, 1, 2 (exponential), capped
+  factor: 2.0
+  max_delay_s: 30.0
+pending_retry_after_s: 300   # advice returned with verification_pending
+area_tolerance_acres: 0.005
+money_tolerance: 0           # printed income / expenditure must equal the registry's exactly
+# document type -> registry source and the identifier field used for the lookup. null = no external issuer.
+sources:
+  fire_cert:       {source: fire,       key: cert_no}
+  building_plan:   {source: building,   key: cert_no}
+  land_doc:        {source: land,       key: survey_no}
+  society_reg:     {source: society,    key: reg_no}
+  aff_letter:      {source: university, key: aff_no}
+  eoa:             {source: aicte,      key: ref_no}
+  financial:       {source: ca,         key: firm_no}
+  faculty_list:    {source: faculty,    key: null}
+  infra_statement: null
+  affidavit:       null
+not_applicable_reason: "no external issuer (Tier 3 internal consistency)"
+# scenario behaviours of the MOCK authority (flags live in the corpus world database, table scenario_flags)
+mock:
+  flaky_failures: 2          # flaky_then_ok: this many 503s per key, then success
+  pending_calls: 1           # pending_then_ok: this many "pending" answers per key, then success

@@ -1,0 +1,20 @@
+norms_version: illustrative-v0
+WARNING: Illustrative values (ratio/area figures taken from a third-party consultancy
+  summary). Replace with Approval Process Handbook 2024-27 values before relying on
+  results.
+programme_types:
+  engineering:
+    students_per_faculty: 15
+    builtup_sqm_per_60_intake: 10000
+    pcs_per_intake_seat: 1.0
+    min_lease_years: 30
+  mba:
+    students_per_faculty: 15
+    builtup_sqm_per_60_intake: 2000
+    pcs_per_intake_seat: 0.5
+    min_lease_years: 30
+  polytechnic:
+    students_per_faculty: 20
+    builtup_sqm_per_60_intake: 5000
+    pcs_per_intake_seat: 1.0
+    min_lease_years: 30

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# runtime data of a running gateway / the demo
+data/
+data_demo/
+# frontend
+frontend/node_modules/
+frontend/.next/
+frontend/*.tsbuildinfo
+frontend/public/demo_rule_update.pdf

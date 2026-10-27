@@ -1,0 +1,23 @@
+# extract settings. OCR: Tesseract (optional dependency; no model downloads).
+tesseract_cmd: null          # null = PATH, then the usual Windows / Linux install locations
+ocr_upscale: 2               # scans are upscaled before OCR (110 dpi text is too small otherwise)
+ocr_psm: 6
+ocr_rule_frac: 0.06      # erase lines longer than this share of the page width/height (table borders); 0 = off
+ocr_render_dpi: 150          # used only when a page is not a single full-page image
+max_pages: 4
+line_tol_raster_pt: 5.0      # OCR word boxes of one row differ by up to ~4 pt (rows are 17+ pt apart)
+line_tol_pt: 3.0             # words whose vertical centres differ less than this are on one line
+label_ratio: 0.82            # fuzzy match of a template label against the start of a line
+tol_digital: {x: 6.0, y: 3.0}
+tol_raster: {x: 14.0, y: 9.0}
+col_tol_digital: 3.0         # a word belongs to the table column whose x0 is at most this much right of the word
+col_tol_raster: 10.0
+conf_position_fallback: 0.8  # cap when a field was located by position because its label was not found
+conf_conflict: 0.5           # two values drawn on top of each other (covered text): the visible one is kept
+conf_shape_mismatch: 0.6     # multiplier when the value does not fit the template's pattern
+conf_enum_repair: 0.9
+low_conf: 0.7                # OCR field below this => low_ocr_confidence finding (ambiguity queue)
+p_low_ocr: 0.3               # soft, tier 4
+# characters Tesseract confuses with digits; applied only inside numeric-shaped fields
+digit_fix: {O: "0", o: "0", l: "1", I: "1", "|": "1", S: "5", B: "8", Z: "2"}
+skip_keys: [qr, seal, signature]

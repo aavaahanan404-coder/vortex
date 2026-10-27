@@ -1,0 +1,7 @@
+# review settings: who reviews what, and what the reviewers may see while the review is still blind.
+double_review_min_score: 0.6      # composite risk at/above this (or category high_anomaly) needs two independent reviewers
+double_review_categories: [high_anomaly]
+decisions: [approve, reject, request_info]    # the AI never decides; these are the humans' only outcomes
+# hidden from a reviewer until BOTH assigned reviewers have submitted (so the machine score and the colleague's view cannot anchor them)
+blind_hidden_fields: [score, category, reasons, other_decisions, other_notes]
+max_reviewers: 3                  # two plus one tie-breaker; after that the case goes to a committee

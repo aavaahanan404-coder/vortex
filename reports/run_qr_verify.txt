@@ -1,0 +1,10 @@
+| label | detected | n | rate |
+|---|---|---|---|
+| certificate_reuse | 2 | 2 | 100% |
+| qr_bad_signature | 4 | 4 | 100% |
+| qr_date_mismatch | 2 | 2 | 100% |
+| spliced_expiry_forgery | 2 | 2 | 100% |
+
+False positives on clean docs: 0/198
+Not targeted by this module: {'exact_duplicate': 2, 'copy_move_scan': 2, 'scan_clean': 4, 'name_mismatch': 1, 'scan_degraded': 4, 'unregistered_certificate': 2, 'expired_fire_cert': 1}
+Misses: 0 (written to reports/misses_qr_verify.csv)

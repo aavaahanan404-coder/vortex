@@ -1,0 +1,17 @@
+# api settings.
+# DEVELOPMENT TOKENS ONLY: these ship so the tests and a local demo work. A deployment replaces them (environment variable
+# SIH_API_TOKENS = path to a JSON file {token: {role, ...}}) and puts real authentication (SSO / OAuth) in front.
+# Roles: applicant (own application only, /apply), reviewer (assigned cases only, blind, /review), supervisor (queue, scores,
+# assignment, everything, /review), admin (purge, audit verification, /admin).
+tokens:
+  dev-applicant-I0001: {role: applicant, inst_id: SYN-I0001}
+  dev-applicant-I0031: {role: applicant, inst_id: SYN-I0031}
+  dev-reviewer-ana:    {role: reviewer, user: ana}
+  dev-reviewer-ben:    {role: reviewer, user: ben}
+  dev-reviewer-chi:    {role: reviewer, user: chi}
+  dev-reviewer-dev:    {role: reviewer, user: dev}
+  dev-supervisor:      {role: supervisor, user: sup}
+  dev-admin:           {role: admin, user: adm}
+max_upload_mb: 25
+rng_seed: 26261                       # reviewer assignment is random but reproducible per seed; change per deployment
+doc_types: [society_reg, land_doc, building_plan, fire_cert, aff_letter, faculty_list, infra_statement, financial, affidavit, eoa]

@@ -1,0 +1,12 @@
+# score = max(hard p, noisy-OR of soft p * weight). Weights multiply a soft finding's p.
+weights:            # per finding id; default_weight otherwise
+  blurry: 1.0
+  tilted: 1.0
+  copy_move: 0.5
+  ela_suspicious: 0.3
+default_weight: 1.0
+high_anomaly_threshold: 0.8     # score at/above this => high_anomaly
+auto_clear_max_score: 0.2       # score below this and nothing but info findings => auto_clear_candidate
+needs_human_ids: [low_ocr_confidence, source_unavailable, manual_review_required, verification_pending, rule_not_evaluable]
+applicant_fixable_ids: [blurry, tilted, qr_absent, missing_document, quality_unreadable, document_not_found, partial_document,
+                        wrong_document_type, file_unreadable, file_too_large]

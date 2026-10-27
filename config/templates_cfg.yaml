@@ -1,0 +1,20 @@
+# templates_build settings (builder statistics and layout-check tolerances)
+min_label_support: 2      # a label variant must be seen this often to be kept
+min_support: 5            # a key must appear in this many training documents to enter a template
+optional_below: 0.9       # a scalar present in fewer than this share of documents is optional
+max_shapes: 6             # more distinct value shapes than this = free text (no pattern)
+y_variable_pt: 2.0       # a scalar whose y varies by more than this across documents has no fixed row
+max_enum: 5               # at most this many distinct values (over >= min_enum_docs documents) = closed enum
+                          # (names repeat across a corpus too: a larger cut-off would turn society names into 'enums')
+min_enum_docs: 30
+# layout check: allowed distance (pt) between an extracted value and its template position.
+# Values are left-aligned at a fixed x and fixed rows, so digital documents agree to < 1 pt; OCR positions of
+# scans carry rendering and skew error.
+tol_digital_pt: {x: 4.0, y: 3.0}
+tol_raster_pt: {x: 14.0, y: 9.0}
+overlap_iou: 0.5
+never_required: []
+p_shifted: 0.45
+p_missing: 0.35
+p_oob: 0.5
+p_overlap: 0.5

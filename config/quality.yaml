@@ -1,0 +1,21 @@
+# Quality gate. Thresholds below are derived by `python -m harness.calibrate_quality` from the
+# corpus_v2 TRAIN split of the graded-blur set only (md5(inst_id) 70/15/15); see
+# reports/quality_calibration.md for the data, the val/test/held-out results and the caveats.
+norm_width: 1000        # px; all metrics are computed after normalising page width
+skew_search_deg: 15.0
+skew_step_deg: 0.5      # skew resolution; estimator error vs corpus labels is <= 0.5 deg
+# Policy "tolerant": blur sigma <= 0.75 passes, sigma >= 1.0 asks for a re-scan (matches the
+# generator's expected_gate for 21/24 sigma-0.75 files). The strict policy (sigma 0.75 fails) would
+# put the global threshold near 294; which policy is right needs OCR accuracy (later `extract` batch).
+vol_min: 114            # fallback: variance of Laplacian below this => "too blurry"
+vol_min_by_doc_type:    # train-derived geometric midpoints; n = train sources behind each value
+  affidavit: 108        # n=5
+  building_plan: 104    # n=4
+  eoa: 153              # n=1 (weak evidence; the held-out eoa blur-1.0 files reach VoL 127)
+  fire_cert: 105        # n=3
+  society_reg: 88       # n=4
+                        # land_doc and the rest have no graded files: they use vol_min
+skew_max_deg: 5.0       # |skew| above this => "tilted" (corpus gap: 1.0 .. 7.0)
+p_blurry: 0.6           # soft/tier-4: asks for a re-scan, never rejects
+p_tilted: 0.6
+all_pages: false        # true = check every page

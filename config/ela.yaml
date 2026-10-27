@@ -1,0 +1,14 @@
+# ELA (error level analysis) settings. Mechanics only: ELA has NOT been evaluated on tamper data
+# (that comes in a later batch) and is expected to be weak on text documents, where most of the page
+# is flat white and JPEG re-compression error concentrates on glyph edges.
+jpeg_quality: 90         # re-save quality (the standard ELA choice)
+render_dpi: 150          # digital pages are rasterised at this resolution (scans use their native image)
+native_image_min_cover: 0.9   # a page whose single embedded image covers this share of it is a scan
+amplify: auto            # "auto" = stretch so the p99.9 error maps to 255; or a number (fixed gain)
+block: 16                # px; block size of the localisation grid
+content_std_min: 8.0     # a block must have this gray std (it holds ink / texture) to be scored
+z_hot: 6.0               # robust z-score of a block's mean error above which it is "hot"
+suspicious_score: 18.0   # PLACEHOLDER: 1.2 x the corpus_v2 train-clean maximum (15.0); clean scores on text pages are
+                         # 5-15 and forged pages score the same (reports/BATCH_B_REPORT.md). Not tuned on forgeries.
+p_suspicious: 0.3        # soft, tier 4; scoring.yaml weights ela_suspicious at 0.3 on top
+heatmap_colormap: JET

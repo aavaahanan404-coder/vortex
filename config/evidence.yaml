@@ -1,0 +1,35 @@
+# evidence_pdf settings. Citations map a finding id to the check that raised it; the handbook clause is
+# filled in by the regulator (the rulebook ships with handbook_ref: TODO, so the report says "not yet mapped").
+title: "Document verification evidence"
+disclaimer: >-
+  Advisory report for the reviewing officer. It does not approve or reject an application; every
+  finding is a reason to look, and Tier 4 (image / ML) signals are advisory only. The decision rests with a person.
+tier_names:
+  1: "Tier 1 - cryptographic proof"
+  2: "Tier 2 - issuer lookup"
+  3: "Tier 3 - records consistency"
+  4: "Tier 4 - advisory signal (ML / image heuristic)"
+crop_margin_pt: 36            # context around a flagged box in the page crop
+crop_dpi: 150
+crop_max_width_pt: 440        # width of the image in the PDF
+max_evidence_items: 8         # evidence key/values printed per finding
+max_value_chars: 160
+checks:
+  qr_bad_signature:        {check: F-QR,       desc: "Signed QR verifies against the issuer key"}
+  qr_date_mismatch:        {check: F-QR,       desc: "QR date equals the printed date"}
+  qr_wrong_institution:    {check: F-QR,       desc: "QR certificate belongs to the applicant"}
+  qr_missing_on_digital:   {check: F-QR,       desc: "Digital certificate of this type carries a QR"}
+  qr_absent:               {check: F-QR,       desc: "QR present and readable"}
+  editor_metadata:         {check: F-META,     desc: "No editing tool / late modification in the file metadata"}
+  covered_text:            {check: F-HIDDEN,   desc: "No text hidden under a white patch"}
+  incremental_update:      {check: F-REVISION, desc: "File has a single revision (internal check id)"}
+  signed_content_changed:  {check: F-REVISION, desc: "Content unchanged since signing (internal check id)"}
+  font_anomaly:            {check: F-FONT,     desc: "Typefaces match other documents of the type (internal check id)"}
+  exact_duplicate:         {check: F-DUP,      desc: "Document is not a byte copy of another submission"}
+  visual_near_duplicate:   {check: F-DUP,      desc: "Document is not a near copy of another submission"}
+  text_near_duplicate:     {check: F-DUP,      desc: "Document text is not a near copy of another submission"}
+  blurry:                  {check: F-QUAL,     desc: "Scan sharp enough to read"}
+  tilted:                  {check: F-QUAL,     desc: "Scan straight enough to read"}
+  copy_move:               {check: F-COPYMOVE, desc: "No region copied within the scan"}
+  ela_suspicious:          {check: F-ELA,      desc: "Uniform image-compression history (internal check id)"}
+handbook_ref_unmapped: "handbook clause not yet mapped"

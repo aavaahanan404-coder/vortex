@@ -1,0 +1,31 @@
+# DRAFT rulebook for the SIH26261 rule engine (Stage 4). Norm values come from norms.yaml and are ILLUSTRATIVE.
+# Every rule must be mapped to a real Approval Process Handbook clause: fill `handbook_ref` before use.
+# Expression DSL is a suggestion: evaluate against canonical JSON (doc fields) + SourceAdapter results.
+version: draft-0
+rules:
+  - {id: R001, name: faculty_student_ratio, tier: 3, severity: major, handbook_ref: TODO,
+     expr: "count(faculty_list.rows) >= ceil(sum(affidavit.applied[*].intake) / norms[type].students_per_faculty)"}
+  - {id: R002, name: builtup_area_sufficient, tier: 3, severity: major, handbook_ref: TODO,
+     expr: "infra.instructional + infra.administrative + infra.amenities >= norms[type].builtup_sqm_per_60_intake * total_intake / 60"}
+  - {id: R003, name: pc_to_student_ratio, tier: 3, severity: major, handbook_ref: TODO,
+     expr: "infra.pcs_available >= ceil(total_intake * norms[type].pcs_per_intake_seat)"}
+  - {id: R004, name: fire_certificate_valid, tier: 2, severity: major, handbook_ref: TODO, expr: "fire.valid_to >= application_date"}
+  - {id: R005, name: building_plan_valid, tier: 2, severity: major, handbook_ref: TODO, expr: "building.valid_to >= application_date"}
+  - {id: R006, name: lease_tenure_minimum, tier: 3, severity: major, handbook_ref: TODO, applies_if: "land.tenure == 'lease'", expr: "land.lease_years >= norms[type].min_lease_years"}
+  - {id: R007, name: intake_within_affiliation, tier: 2, severity: critical, handbook_ref: TODO, expr: "all(c.intake <= registry.university_affiliations[c.course].approved_intake for c in affidavit.applied)"}
+  - {id: R008, name: name_consistency, tier: 3, severity: major, handbook_ref: TODO, expr: "normalize(doc.institution_name) == normalize(registry.institution.name) for every document"}
+  - {id: R009, name: land_area_matches_registry, tier: 2, severity: major, handbook_ref: TODO, expr: "abs(land.area_acres - registry.land_records[land.survey_no].area_acres) < 0.005"}
+  - {id: R010, name: mandatory_documents_present, tier: 3, severity: critical, handbook_ref: TODO, expr: "required_docs subset_of submitted_docs"}
+  - {id: R011, name: faculty_single_employment, tier: 2, severity: critical, handbook_ref: TODO, expr: "all(registry.faculty_employment[f.id].current_inst == application.inst_id for f in faculty_list.rows)"}
+  - {id: R012, name: land_parcel_ownership, tier: 2, severity: critical, handbook_ref: TODO, expr: "registry.land_records[land.survey_no].holder_inst_id == application.inst_id"}
+  - {id: R013, name: certificate_exists_in_registry, tier: 2, severity: critical, handbook_ref: TODO, expr: "exists(registry.fire_certs[fire.cert_no]) and exists(registry.building_approvals[building.cert_no])"}
+  - {id: R014, name: financial_arithmetic, tier: 3, severity: major, handbook_ref: TODO, expr: "fin.surplus == fin.income - fin.expenditure"}
+  - {id: R015, name: certificate_issued_to_applicant, tier: 2, severity: critical, handbook_ref: TODO, expr: "registry.fire_certs[fire.cert_no].inst_id == application.inst_id"}
+  - {id: R016, name: printed_matches_registry, tier: 2, severity: critical, handbook_ref: TODO, expr: "doc.valid_to == registry.record.valid_to for fire and building certificates"}
+forensic_checks:   # evaluated by Stage 3, compared against manifest labels (kind: forensic)
+  - {id: F-QR, tier: 1, desc: "signed QR verifies (HMAC stand-in for PKI) and its date equals the printed date"}
+  - {id: F-META, tier: 4, desc: "editor tag in Creator/Producer or ModDate far after CreationDate"}
+  - {id: F-HIDDEN, tier: 4, desc: "text layer contains overlapped/hidden text under the visible value"}
+  - {id: F-DUP, tier: 3, desc: "SHA-256 exact match, pHash near-match, MinHash similarity across institutions"}
+  - {id: F-QUAL, tier: 4, desc: "quality gate: variance of Laplacian >= T and |skew| <= max"}
+  - {id: F-COPYMOVE, tier: 4, desc: "copy-move region on scans (mask file in manifest)"}

@@ -1,0 +1,41 @@
+# pdf_forensics settings. Numbers were chosen from the corpus_v2 TRAIN split and checked on val,
+# the test split and corpus_test_v2 (reports/BATCH_B_REPORT.md). The per-doc-type font allow-list is
+# machine-generated into fonts_allowlist.yaml by `python -m harness.build_font_allowlist`
+# (train-split clean documents only).
+fonts_allowlist_file: fonts_allowlist.yaml
+
+# --- editor_metadata (soft, tier 3) -------------------------------------------------------------
+# Case-insensitive substrings of /Creator or /Producer. Validated on the corpus: ilovepdf,
+# Adobe Photoshop, Foxit PhantomPDF, Sejda. The rest come from domain knowledge and are NOT
+# exercised by the corpus (they cannot produce corpus false positives, but are unvalidated).
+editor_names: [ilovepdf, sejda, photoshop, phantompdf, smallpdf, pdfescape, "pdf-xchange editor", pdfelement]
+moddate_gap_days: 7        # ModDate - CreationDate above this is suspicious. Corpus: clean = 0 days,
+                           # editor documents = 20..200 days (so 1..19 are all equally supported)
+p_editor_name: 0.6         # editing tool named in the metadata
+p_gap_only: 0.35           # modified long after creation, tool not recognised
+p_editor_and_gap: 0.7      # both
+
+# --- covered_text (soft, tier 3) ----------------------------------------------------------------
+# A text span drawn EARLIER than a near-white filled shape that covers most of it. Structural and
+# deterministic, but a legitimate producer can do the same, hence soft (not hard).
+white_min: 0.97            # fill colour channels all >= this => "white"
+min_fill_opacity: 0.9
+min_text_opacity: 0.5      # ignore faint text (watermarks are drawn at ~0.18)
+max_fill_page_frac: 0.5    # ignore fills larger than this share of the page (page backgrounds)
+char_overlap_min: 0.5      # share of a glyph box that must lie inside the fill to count as covered
+span_dominated_frac: 0.5   # if at least this share of a span's glyphs is covered, report the whole span
+skip_identical_redraw: true  # covered text identical to the text redrawn on top is not a change
+p_covered_text: 0.9        # text covered AND something else drawn on top of the patch
+p_covered_text_no_replacement: 0.75
+max_covered_findings: 5
+
+# --- incremental_update (soft, tier 3) ----------------------------------------------------------
+# More than one revision (%%EOF). Linearized files are discounted. Legitimate re-saves (form fill,
+# annotations, signing) look the same, so p is moderate and drops when no page content changed.
+p_incremental_update: 0.5
+p_incremental_no_visible_change: 0.25
+max_diff_pages: 5          # pages compared between revision 1 and the final file
+p_signed_content_changed: 0.85   # page content differs from the signed revision (/ByteRange)
+
+# --- font_anomaly (soft, tier 3) ----------------------------------------------------------------
+p_font_anomaly: 0.6

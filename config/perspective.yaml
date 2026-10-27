@@ -1,0 +1,25 @@
+# perspective settings: find the page in a phone photo and warp it flat.
+detect_max_side: 900         # px; detection runs on a downscaled copy
+blur_sigma: 2.0
+canny: [40, 120]
+canny_color: [12, 36]       # thresholds for the Lab a/b edge maps (colour differences are smaller than brightness ones)
+min_area_ratio: 0.20         # the page must cover at least this share of the photo
+approx_epsilon: [0.015, 0.02, 0.03, 0.05]   # polygon simplification tried in turn (share of the contour perimeter)
+frame_area_ratio: 0.95       # a candidate covering more than this share of the photo is the frame, not a page inside it
+refine_max_move: 0.04       # a refined corner may move at most this share of the page diagonal from the polygon corner
+min_rectangularity: 0.80     # contour area / quadrilateral area
+max_corner_angle_dev: 35     # degrees away from 90 a corner may be (perspective makes them non-right)
+not_needed_min_area: 0.80    # an upright undistorted rectangle covering this share of the image is a flat full-page scan
+not_needed_max_tilt_deg: 1.5
+not_needed_max_angle_dev: 3.0
+paper_gray: 150              # a photo whose frame is the 'page' must be mostly brighter than this ...
+frame_min_bright_share: 0.5  # ... on at least this share of its pixels
+partial_margin_px: 3         # a corner this close to (or beyond) the photo edge means the page is cut off
+target_aspect: 1.4142        # height / width of the output page (A4); null = use the measured edge lengths
+output_width: 1240           # px of the corrected page (150 dpi A4)
+band_close_frac: 0.12        # dark bands (page headers) up to this share of the photo's longer side that touch its edge are closed over
+page_min_gray: 140           # a page candidate must be paper-bright inside (median grey level)
+aspect_tol: 0.15             # corrected page proportions may differ this much from target_aspect before the capture is refused
+support_offset_px: 5          # compare the colour this many (downscaled) px inside and outside each side
+support_min_delta: 10        # Lab distance that counts as 'the colour changes here'
+min_side_support: 0.5        # every side needs at least this share of its length with a colour change, else the capture is refused

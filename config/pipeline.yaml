@@ -1,0 +1,22 @@
+# pipeline settings: intake limits, which checks run on what, and what an applicant may be shown.
+max_file_mb: 25
+image_exts: [.png, .jpg, .jpeg, .tif, .tiff, .bmp, .webp]
+run_ela_on_raster: true            # ELA only on scans / photos (it says nothing about vector PDFs)
+qr_doc_types: [building_plan, fire_cert, eoa]       # documents expected to carry a signed QR
+qr_min_conf: 0.9                   # a printed date read by OCR is compared with the QR only if read at least this surely
+classify_min_coverage: 0.5         # share of a template's required fields found, below which another type is tried
+classify_accept_coverage: 0.8      # ... and the other type must reach this to be proposed
+layout_check: true
+
+# --- what the applicant portal may show (Client mode). Everything else is staff-only and never leaves the server. ---
+# finding id -> true. These are fixable by the applicant: re-upload, retake, supply the missing document.
+client_visible_ids: [blurry, tilted, document_not_found, partial_document, file_unreadable, file_too_large, wrong_document_type,
+                     qr_absent, quality_unreadable, low_ocr_confidence]
+client_visible_rules: [R004, R005, R010]            # certificate expired on the application date; mandatory document missing
+client_messages:
+  low_ocr_confidence: "Some values could not be read reliably from this upload. Please check the highlighted values or upload a clearer copy."
+  file_unreadable: "This file could not be opened. Please upload a PDF or a clear photo of the page."
+  file_too_large: "This file is too large. Please upload a smaller PDF or photo."
+  R004: "The fire safety certificate is not valid on the application date. Please upload a current certificate."
+  R005: "The building plan approval is not valid on the application date. Please upload a current approval."
+  R010: "A mandatory document is missing. Please upload it before submitting."

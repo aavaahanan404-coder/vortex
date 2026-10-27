@@ -1,0 +1,47 @@
+# dedup settings. Thresholds are justified in reports/BATCH_B_REPORT.md from the distribution of
+# unrelated document pairs (python -m harness.dedup_stats) and a trade-off table for the labelled pairs.
+render_width: 512          # px, page 1 render used for the perceptual hash
+hash_size: 32              # pHash = hash_size^2 bits (1024) from a (hash_size*highfreq)^2 DCT.
+highfreq: 4                # 16x16 (256 bits) collides across same-template pages; 32x32 does not.
+shingle_words: 3           # word shingle length for MinHash
+min_shingles: 8            # fewer (non-boilerplate) shingles than this => no text signature
+n_perm: 128                # MinHash permutations (Jaccard standard error <= 0.045)
+seed: 26261
+boilerplate_file: dedup_boilerplate.yaml
+cross_institution_only: true   # same-institution pairs are not "reuse across applicants"
+max_hamming_frac: 0.04     # pHash: copies of the same page (JPEG re-save, re-scale, contrast; NOT brightness/rotation).
+                           # Variants measured on 26 clean scans: max 0.027. Unrelated same-type pairs involving a scan start at 0.057 (corpus_v2) / 0.055 (corpus_test_v2); the labelled
+                           # re-rendered near-duplicates sit at 0.086-0.098, where 76 unrelated mixed pairs
+                           # (corpus_v2) also sit, so pHash cannot catch them: the field-region channel below does.
+visual_raster_only: true   # digital pages of one template collide in pHash at any useful threshold
+min_jaccard: 0.75         # MinHash on non-boilerplate shingles; unrelated same-type max 0.60 (train)
+# --- field-region channel: scan <-> digital pair of one type, compared only where the type's documents vary
+field_width: 700           # px, render width
+field_bg_sigma: 12         # background normalisation (removes scan illumination)
+field_smooth: 0.8
+field_var_std: 0.02        # a pixel is "variable" when the digital documents of the type differ here
+field_hdil: 25             # merge variable pixels into text-line boxes
+field_vdil: 3
+field_min_area: 150
+field_shift: 4             # px search tolerance around each box
+field_min_digital: 10      # digital documents of the type needed in the index to learn the boxes
+field_sample: 40           # digital documents used to learn the boxes
+field_min_boxes: 5
+min_field_score: 0.94      # corpus_v2 unrelated scans max 0.875, labelled re-scans 0.962-0.964; rule fixed on
+                           # corpus_v2 alone (0.875 + 0.75 x gap), then checked on corpus_test_v2 (see report)
+# --- field-value channel (needs extract's fields): identity values that are not template-constant must agree
+fv_common_df: 0.05         # a (key, value) held by >= 5% of the type's documents (min fv_common_min_docs) is template-constant
+fv_common_min_docs: 3
+fv_min_rare: 4             # fields compared (present on both, not constant) needed before a verdict
+fv_min_equal: 3
+fv_min_frac: 0.95          # essentially all: one institution-specific field that differs means a different document
+                           # (same-society institutions agree on 5 of 6 society_reg fields: corpus_test_v2 I0001/I0002/I0006)
+fv_min_coverage: 1.0       # every non-constant field present on either side must be comparable, or the pair is undecided (pixel channel decides)
+fv_min_conf: 0.6           # extractor-confidence floor for a field to take part
+fv_min_len: 4              # values shorter than this must match exactly
+fv_fuzzy_ratio: 0.9        # OCR typos: normalised strings with this similarity count as equal
+field_regions_fallback: true   # keep the pixel channel for pairs where one side has no extracted fields
+p_exact: 0.8               # soft: identical bytes are certain, but sharing may be legitimate
+p_visual: 0.5              # tier 4 (image heuristic), advisory
+p_text: 0.5
+max_matches: 5

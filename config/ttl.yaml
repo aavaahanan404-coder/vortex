@@ -1,0 +1,6 @@
+# ttl_purge settings. Drafts and extraction caches live 48 hours; nothing else is ever purged.
+ttl_hours: 48
+min_ttl_hours: 1                  # refuse an absurdly small TTL (a config typo must not wipe live drafts)
+purge_kinds: [draft_upload, extraction_cache]
+# Entries of any other kind (submitted, evidence, audit, ...) are protected: they are listed in the
+# report as "protected" and never passed to delete().

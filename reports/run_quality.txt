@@ -1,0 +1,7 @@
+| label | detected | n | rate |
+|---|---|---|---|
+| scan_degraded | 5 | 5 | 100% |
+
+False positives on clean docs: 0/728
+Not targeted by this module: {'land_area_mismatch': 2, 'qr_bad_signature': 4, 'certificate_reuse': 2, 'exact_duplicate': 2, 'editor_metadata': 2, 'copy_move_scan': 5, 'scan_clean': 8, 'spliced_expiry_forgery': 2, 'name_mismatch': 3, 'double_employed_faculty': 2, 'pc_shortfall': 3, 'unregistered_certificate': 2, 'financial_arithmetic_error': 2, 'builtup_shortfall': 2, 'qr_date_mismatch': 2, 'expired_fire_cert': 1, 'faculty_shortfall': 2, 'intake_exceeds_affiliation': 3, 'shared_land_parcel': 2, 'short_lease': 1, 'near_duplicate_land': 1, 'visual_near_duplicate': 1}
+Misses: 0 (written to reports/misses_quality.csv)

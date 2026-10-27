@@ -1,0 +1,8 @@
+# diff (side-by-side version comparison) settings
+render_dpi: 100            # raster used for the visual diff
+visual_threshold: 40       # gray-level difference (0..255) that counts as changed
+visual_close_px: 9         # merge nearby changed pixels into one region
+visual_min_area_px: 60     # ignore specks smaller than this
+text_min_opacity: 0.5      # ignore faint text (watermarks) in the text diff
+max_pages: 50              # pages compared; the rest are reported as not compared
+max_changes_listed: 100    # cap of text changes / regions kept in the evidence
