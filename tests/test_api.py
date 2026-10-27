@@ -214,6 +214,9 @@ def test_request_info_reopens_the_application_and_a_reupload_creates_a_diff(tmp_
     assert r.status_code == 200 and r.json()["version"] == 2
     d = cl.get(f"/review/cases/{i}/documents/fire_cert/diff", headers=H("sup")).json()
     assert d["from"] == 1 and d["to"] == 2 and d["finding"]["id"] == "diff_summary" and "Re-issued copy" in json.dumps(d)
+    ev = d["finding"]["evidence"]                                       # the review page reads exactly these fields (frontend toDiff)
+    assert isinstance(ev["text_changes"], list) and isinstance(ev["changed_pages"], list) and ev["n_text_changes"] >= 1
+    assert all(len(t["new_bbox"] or [0, 0, 0, 0]) == 4 and {"page", "old", "new"} <= set(t) for t in ev["text_changes"])
     assert cl.get(f"/review/cases/{i}/documents/fire_cert/diff", headers=tok).status_code == 403          # the applicant never sees diffs
     assert cl.get(f"/review/cases/{i}/documents/land_doc/diff", headers=H("sup")).status_code == 404
 

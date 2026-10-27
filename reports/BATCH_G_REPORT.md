@@ -33,7 +33,7 @@ demo server. Input: the FastAPI gateway of Batch F (plus five small endpoints ad
 
 ## Not verified / limits (read before relying on this)
 
-- The earlier-version **diff panel was not exercised in the browser**: the demo seeds no resubmitted document, so `/diff` returns 404 and the panel stays hidden. The code is typechecked only. (Each such 404 is also logged in the browser console.)
+- ~~The earlier-version diff panel was not exercised in the browser.~~ **Found broken, now fixed (Batch H follow-up):** when a document had been re-uploaded, the review page crashed ("Application error: a client-side exception") because it read the diff from the wrong level of the API payload (`finding.evidence`, not the top level). Fixed with a tolerant mapping, an app-level error screen, and a test pinning the payload shape; re-verified in the production build on a real re-uploaded case (tabs, findings, overlay).
 - Crop handles were checked on a generated image with the detector's corners and the Straighten button; **dragging with mouse or touch and arrow-key movement were not driven**. Real phone photos were not tested (carried over from Batch F).
 - No accessibility audit: labels, roles, aria text and focus styles are written in, but no screen reader or keyboard-only pass was run.
 - Evidence PDF download was not clicked in the browser (the endpoint is covered by the API tests).

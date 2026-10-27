@@ -6,10 +6,18 @@ import { api, ApiError, blob, DOC_LABEL, jsonBody, type CaseDoc, type Finding, t
 import { errorText, useRequireRole } from "@/lib/auth";
 import { PageViewer, type Box } from "@/components/PageViewer";
 
+interface TextChange { page: number; op: string; old: string; new: string; old_bbox: number[] | null; new_bbox: number[] | null }
 interface DiffReport {
-  pages_old: number; pages_new: number; changed_pages: number[]; n_text_changes: number; n_visual_regions: number;
-  text_changes: { page: number; op: string; old: string; new: string; old_bbox: number[] | null; new_bbox: number[] | null }[];
-  visual_regions: { page: number; bbox: number[] }[];
+  from: number; to: number; changed_pages: number[]; n_text_changes: number; n_visual_regions: number;
+  text_changes: TextChange[]; visual_regions: { page: number; bbox: number[] }[];
+}
+/** The API stores {from, to, finding: {evidence: {...}}}; every field is optional in practice, so nothing here may assume it exists. */
+function toDiff(raw: { from?: number; to?: number; finding?: { evidence?: Partial<DiffReport> } } | null): DiffReport | "none" {
+  const e = raw?.finding?.evidence;
+  if (!raw || !e) return "none";
+  const text_changes = Array.isArray(e.text_changes) ? e.text_changes : [], visual_regions = Array.isArray(e.visual_regions) ? e.visual_regions : [];
+  return { from: raw.from ?? 0, to: raw.to ?? 0, changed_pages: Array.isArray(e.changed_pages) ? e.changed_pages : [],
+           n_text_changes: e.n_text_changes ?? text_changes.length, n_visual_regions: e.n_visual_regions ?? visual_regions.length, text_changes, visual_regions };
 }
 
 export default function CasePage({ params }: { params: Promise<{ inst: string }> }) {
@@ -159,11 +167,11 @@ function Viewer({ inst, documents, findings }: { inst: string; documents: CaseDo
   useEffect(() => {
     setDiff(null); setShowDiff(false); setPage(1); setActive(null);
     if (!docType) return;
-    api<DiffReport>(`/review/cases/${inst}/documents/${docType}/diff`).then(setDiff).catch(() => setDiff("none"));
+    api<Parameters<typeof toDiff>[0]>(`/review/cases/${inst}/documents/${docType}/diff`).then((r) => setDiff(toDiff(r))).catch(() => setDiff("none"));
   }, [inst, docType]);
   const diffBoxes: Box[] = showDiff && diff && diff !== "none"
-    ? [...diff.visual_regions.map((r, i) => ({ page: r.page, x: r.bbox[0], y: r.bbox[1], w: r.bbox[2], h: r.bbox[3], id: `v${i}`, tone: "diff-new" as const })),
-       ...diff.text_changes.flatMap((t, i) => t.old_bbox ? [{ page: t.page, x: t.old_bbox[0], y: t.old_bbox[1], w: t.old_bbox[2], h: t.old_bbox[3], id: `t${i}`, tone: "diff-old" as const }] : [])]
+    ? [...diff.visual_regions.filter((r) => r.bbox?.length >= 4).map((r, i) => ({ page: r.page, x: r.bbox[0], y: r.bbox[1], w: r.bbox[2], h: r.bbox[3], id: `v${i}`, tone: "diff-old" as const })),
+       ...diff.text_changes.flatMap((t, i) => (t.new_bbox && t.new_bbox.length >= 4 ? [{ page: t.page, x: t.new_bbox[0], y: t.new_bbox[1], w: t.new_bbox[2], h: t.new_bbox[3], id: `t${i}`, tone: "diff-new" as const }] : []))]
     : [];
 
   return (
@@ -222,9 +230,9 @@ function Viewer({ inst, documents, findings }: { inst: string; documents: CaseDo
 
           {diff && diff !== "none" && (
             <div className="card p-4">
-              <h3 className="flex items-center gap-2 font-semibold"><GitCompare aria-hidden className="h-4 w-4" /> Changes since the earlier version</h3>
+              <h3 className="flex items-center gap-2 font-semibold"><GitCompare aria-hidden className="h-4 w-4" /> Changes since the earlier version{diff.from && diff.to ? ` (v${diff.from} to v${diff.to})` : ""}</h3>
               <p className="mt-1 text-sm text-ink-soft">{diff.changed_pages.length ? `${diff.n_text_changes} text change(s), ${diff.n_visual_regions} visual region(s) on page(s) ${diff.changed_pages.join(", ")}.` : "No differences found in the compared pages."}</p>
-              <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> Mark changes on the page (orange: earlier text, green: changed areas)</label>
+              <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> Mark changes on the page (green: changed text, orange: other changed areas)</label>
               {diff.text_changes.length > 0 && (
                 <table className="mt-2 w-full text-left text-sm">
                   <caption className="sr-only">Text changes</caption>
