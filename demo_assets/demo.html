@@ -33,6 +33,10 @@
   code { background:var(--brand-l); color:var(--brand); padding:.05rem .35rem; border-radius:.3rem; font-size:.9em; }
   details { background:var(--card); border:1px solid var(--line); border-radius:.75rem; padding:.7rem 1rem; } summary { cursor:pointer; font-weight:600; }
   #go { margin-top:1rem; }
+  #files { overflow-x:auto; }
+  td code { word-break:break-all; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; margin:.5rem 0; } th, td { text-align:left; vertical-align:top; padding:.4rem .5rem; border-top:1px solid var(--line); } thead th { border-top:0; color:var(--faint); font-weight:600; } tbody th { font-weight:600; }
+  .mini { margin-left:.5rem; padding:.15rem .6rem; border-radius:.4rem; border:1px solid var(--brand); background:transparent; color:var(--brand); cursor:pointer; font:inherit; font-size:.85rem; }
 </style>
 </head>
 <body>
@@ -47,6 +51,23 @@
   <p class="faint">Each button opens a new tab already signed in as that person, so you can keep this page as your script.</p>
   <div class="grid" id="roles"></div>
 
+  <h2>Files to upload</h2>
+  <div class="card" id="files">
+    <p>When a file chooser opens, go to this folder on the presenting computer:</p>
+    <p><code id="samplepath">demo_assets\sample_uploads</code> <button id="copypath" class="mini" type="button">Copy path</button></p>
+    <table>
+      <thead><tr><th scope="col">Where</th><th scope="col">Upload this</th><th scope="col">What it shows</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Applicant: new, cards 1-9</th><td><code>applicant_SYN-I0003\01_...pdf</code> to <code>09_...pdf</code>, in card order; <code>10_prior_eoa_letter.pdf</code> is the optional last card</td><td>A clean institution: every document is accepted and the values are read back</td></tr>
+        <tr><th scope="row">Applicant: new, Building plan card</th><td><code>03_building_plan_PHONE_PHOTO.jpg</code> instead of the PDF</td><td>Drag the corners, Straighten, Use this page; the values are read from the photo</td></tr>
+        <tr><th scope="row">Any empty card</th><td><code>03_building_plan_BLURRY_PHOTO.jpg</code></td><td>A warning appears before the upload: "looks blurry"</td></tr>
+        <tr><th scope="row">Admin: Rules and norms</th><td><code>admin_rule_pdfs\rule_update_example.pdf</code></td><td>A structured update: preview, a rejected row, a rule switched off</td></tr>
+        <tr><th scope="row">Admin: Rules and norms</th><td><code>admin_rule_pdfs\handbook_prose_example.pdf</code></td><td>Refused plainly: prose handbooks need the AI step (not built yet)</td></tr>
+      </tbody>
+    </table>
+    <p class="faint">The "Applicant: new" form needs exactly: <b>Bharathi College of Engineering</b>, date <b>2026-01-14</b>, Existing institution, Engineering. Submitting it adds a fourth (low-risk) case to the queue; restart without Keep to reset. All files are synthetic.</p>
+  </div>
+
   <h2>The five-minute story</h2>
   <ol class="story" id="story">
     <li data-k="s1">
@@ -59,10 +80,13 @@
       <p><a class="btn" href="?as=applicant64" target="_blank" rel="noopener">Open applicant (draft)</a></p>
     </li>
     <li data-k="s2">
-      <h3>Phone photo: straighten and upload</h3>
-      <p class="say">Say: "Most applicants will photograph papers. They drag four handles to the page corners; we flatten it before reading."</p>
-      <ul><li>On an empty card press <b>Upload</b>, pick a photo of a printed page (any picture works for the demo).</li>
-          <li>Drag a corner handle, press <b>Straighten</b>, then <b>Use this page</b>. Unclear values are marked "please check".</li></ul>
+      <h3>A new applicant: upload, and a phone photo</h3>
+      <p class="say">Say: "Most applicants will photograph papers. They drag four handles to the page corners; we flatten the page before reading it."</p>
+      <ul><li>Open <b>Applicant: new</b>, fill the start form (values in the Files box above), then upload <code>01</code> to <code>09</code> from the sample folder. Each card turns green and shows the values read from it.</li>
+          <li>On <b>Building plan approval</b> choose <code>03_building_plan_PHONE_PHOTO.jpg</code>: drag a corner handle, press <b>Straighten</b>, then <b>Use this page</b>. The certificate number and area are read from the photo.</li>
+          <li>Try <code>03_building_plan_BLURRY_PHOTO.jpg</code> first if you want to show the instant "looks blurry" warning.</li>
+          <li>Press <b>Check my application</b>: ready to submit.</li></ul>
+      <p><a class="btn" href="?as=applicant03" target="_blank" rel="noopener">Open applicant (new)</a></p>
     </li>
     <li data-k="s3">
       <h3>Supervisor: the queue and the evidence</h3>
@@ -82,9 +106,10 @@
     <li data-k="s5">
       <h3>Admin: change the rules by uploading a PDF</h3>
       <p class="say">Say: "When the regulator revises a norm, an administrator uploads the table. They see every change, up or down, and its effect on cases already received, before anything applies."</p>
-      <ul><li><b>Rules and norms</b>: Download template, then upload the example update below.</li>
+      <ul><li><b>Rules and norms</b>: Download template, then upload <code>rule_update_example.pdf</code> (also downloadable below).</li>
           <li>Read the preview (arrows, rejected rows, effect on cases); tick the confirmation (it switches a rule off) and <b>Apply</b>.</li>
-          <li>Press <b>Restore shipped rules</b>, then <b>Verify audit trail</b>: every step is chained and tamper-evident.</li></ul>
+          <li>Press <b>Restore shipped rules</b>, then <b>Verify audit trail</b>: every step is chained and tamper-evident.</li>
+          <li>Last, upload <code>handbook_prose_example.pdf</code>: it is refused with a plain explanation (prose handbooks are the planned AI step).</li></ul>
       <p><a class="btn" href="?as=admin" target="_blank" rel="noopener">Open admin</a> <a class="btn sec" href="/demo/rule_update_example.pdf" download>Download example rule PDF</a></p>
     </li>
   </ol>
@@ -158,6 +183,12 @@ async function ping() {
   }
 }
 ping(); setInterval(ping, 4000);
+fetch("/demo/info").then((r) => r.json()).then((j) => { $("samplepath").textContent = j.samples; }).catch(() => {});
+$("copypath").addEventListener("click", async () => {
+  const b = $("copypath");
+  try { await navigator.clipboard.writeText($("samplepath").textContent); b.textContent = "Copied"; } catch (e) { b.textContent = "Select the path and copy it"; }
+  setTimeout(() => { b.textContent = "Copy path"; }, 2000);
+});
 </script>
 </body>
 </html>

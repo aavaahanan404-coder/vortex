@@ -86,6 +86,10 @@ def main() -> None:
     def hub():
         return FileResponse(assets / "demo.html", media_type="text/html")
 
+    @app.get("/demo/info", include_in_schema=False)                     # lets the hub show where the sample files are on THIS computer
+    def info():
+        return {"samples": str(assets / "sample_uploads")}
+
     @app.get("/demo/rule_update_example.pdf", include_in_schema=False)
     def example_rule_pdf():
         return FileResponse(assets / "rule_update_example.pdf", media_type="application/pdf", filename="rule_update_example.pdf")

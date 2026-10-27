@@ -34,6 +34,20 @@ Paste a token on the first page; each token is one role.
 
 Cases in the queue: SYN-I0031 (expiry date covered and replaced, reviewers dev + chi), SYN-I0010 (edited after signing, reviewers chi + ben), SYN-I0001 (rules defect, not yet assigned).
 
+## Which files to upload
+Everything is ready in **`demo_assets/sample_uploads/`** (the Demo hub shows this table and the folder path with a Copy button). Details are in that folder's `README.txt`; to rebuild it: `python -m harness.make_demo_samples`.
+
+| Where | Upload | What it shows |
+|---|---|---|
+| Applicant: new (`demo-applicant-i0003`), the start form first | form values: Bharathi College of Engineering, 2026-01-14, Existing institution, Engineering | |
+| Same applicant, cards 1-9 | `applicant_SYN-I0003/01_...pdf` to `09_...pdf` (10 is the optional last card) | each document accepted, values read back; "Check my application" says ready |
+| Same applicant, Building plan card | `03_building_plan_PHONE_PHOTO.jpg` instead of the PDF | corner handles, Straighten, values read from the photo |
+| Any empty card | `03_building_plan_BLURRY_PHOTO.jpg` | "looks blurry" warning before upload |
+| Admin, Rules and norms | `admin_rule_pdfs/rule_update_example.pdf` | preview with ups and downs, a rejected row, a rule switched off |
+| Admin, Rules and norms | `admin_rule_pdfs/handbook_prose_example.pdf` | refused: prose handbooks need the (planned) AI step |
+
+All of it is synthetic. Bharathi College is a clean institution, so its papers pass every check; submitting it adds a low-risk fourth case to the queue. The other demo institutions are already loaded; their papers are not interchangeable with Bharathi's.
+
 ## A five-minute story
 1. **Applicant** (`demo-applicant-i0064`): the checklist shows what is uploaded. Click **Check my application**: it says the fire certificate is not valid on the application date and a mandatory document is missing, in plain words, with no hint of fraud checks. Open "Values we read from this document".
 2. **Photo upload** on any empty card: pick a photo of a printed page (or any image); drag the four corner handles; **Straighten**; **Use this page**. Values that were hard to read are highlighted "please check".
