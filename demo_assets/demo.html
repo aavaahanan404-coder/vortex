@@ -45,6 +45,7 @@
     <div><h1>Demo hub</h1><p class="soft">Document verification for institution approvals: sample data, mock registries.</p></div>
     <p aria-live="polite">System: <span id="status" class="pill warn">checking...</span></p>
   </header>
+  <p id="hosted" class="note" hidden>Hosted copy: sample data only. Everything you change resets to the starting state whenever the site restarts. On a free host it sleeps after about 15 minutes idle, and the first visit afterwards takes a few minutes to wake up.</p>
   <p id="go" class="note" hidden></p>
 
   <h2>Open as...</h2>
@@ -53,8 +54,9 @@
 
   <h2>Files to upload</h2>
   <div class="card" id="files">
-    <p>When a file chooser opens, go to this folder on the presenting computer:</p>
-    <p><code id="samplepath">demo_assets\sample_uploads</code> <button id="copypath" class="mini" type="button">Copy path</button></p>
+    <p><a class="btn" href="/demo/sample_uploads.zip" download>Download all sample files (zip)</a></p>
+    <p class="faint">Unzip it anywhere; when a file chooser opens, browse to the unzipped folder.</p>
+    <p id="localpath" hidden>On the presenting computer they are also here: <code id="samplepath">demo_assets\sample_uploads</code> <button id="copypath" class="mini" type="button">Copy path</button></p>
     <table>
       <thead><tr><th scope="col">Where</th><th scope="col">Upload this</th><th scope="col">What it shows</th></tr></thead>
       <tbody>
@@ -183,7 +185,7 @@ async function ping() {
   }
 }
 ping(); setInterval(ping, 4000);
-fetch("/demo/info").then((r) => r.json()).then((j) => { $("samplepath").textContent = j.samples; }).catch(() => {});
+fetch("/demo/info").then((r) => r.json()).then((j) => { if (j.hosted) { $("hosted").hidden = false; } else { $("samplepath").textContent = j.samples; $("localpath").hidden = false; } }).catch(() => {});
 $("copypath").addEventListener("click", async () => {
   const b = $("copypath");
   try { await navigator.clipboard.writeText($("samplepath").textContent); b.textContent = "Copied"; } catch (e) { b.textContent = "Select the path and copy it"; }

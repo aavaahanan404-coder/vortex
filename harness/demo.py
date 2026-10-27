@@ -10,12 +10,15 @@ Not a deployment: static dev bearer tokens (printed below), a throwaway data dir
 from __future__ import annotations
 
 import argparse
+import io
+import os
 import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 import uvicorn
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.testclient import TestClient
 
 from api.app import Settings, create_app
@@ -72,9 +75,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--seed-only", action="store_true", help="prepare the demo data and exit (used when the hosted image is built)")
+    ap.add_argument("--data-dir", default=None, help="where the demo data lives (default: data_demo next to the project)")
     a = ap.parse_args()
     ids = SUBMITTED + list(DRAFT) + EMPTY
-    data = ROOT / "data_demo"
+    data = Path(a.data_dir) if a.data_dir else ROOT / "data_demo"
     fresh = not (a.keep and data.exists())
     if fresh and data.exists():
         shutil.rmtree(data)
@@ -88,7 +93,16 @@ def main() -> None:
 
     @app.get("/demo/info", include_in_schema=False)                     # lets the hub show where the sample files are on THIS computer
     def info():
-        return {"samples": str(assets / "sample_uploads")}
+        return {"samples": str(assets / "sample_uploads"), "hosted": bool(os.environ.get("SIH_HOSTED"))}
+
+    @app.get("/demo/sample_uploads.zip", include_in_schema=False)       # the files to upload, for a presenter using the hosted site
+    def samples_zip():
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted((assets / "sample_uploads").rglob("*")):
+                if f.is_file():
+                    z.write(f, f.relative_to(assets / "sample_uploads").as_posix())
+        return Response(buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="vortex_sample_uploads.zip"'})
 
     @app.get("/demo/rule_update_example.pdf", include_in_schema=False)
     def example_rule_pdf():
@@ -96,6 +110,9 @@ def main() -> None:
 
     if fresh:
         seed(TestClient(app), ids)
+    if a.seed_only:
+        print("demo data prepared in", data)
+        return
     print("\nDemo tokens (paste one on the sign-in page):")
     for k, v in st.tokens.items():
         print(f"  {k:28s} {v['role']:11s} {v.get('inst_id') or v.get('user')}")

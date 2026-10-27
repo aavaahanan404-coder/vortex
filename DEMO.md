@@ -55,6 +55,18 @@ All of it is synthetic. Bharathi College is a clean institution, so its papers p
 4. **Reviewer** (`demo-reviewer-dev`, a different browser or private window): the same case, **blind**: no score, no probabilities. Record a decision; the second reviewer decides separately (`demo-reviewer-chi`).
 5. **Admin** (`demo-admin`) -> **Rules and norms**: Download template, then upload `demo_assets/rule_update_example.pdf`. The preview shows each value going up or down, rejected rows with reasons, and the effect on the submitted cases. Tick the confirmation (it switches a rule off), **Apply**, then **Restore shipped rules**. **Verify audit trail** shows every step chained.
 
+## Hosting it on the internet (Render)
+The repository contains a `Dockerfile` and a `render.yaml` blueprint: one container runs the demo API and the web app on one public address.
+1. Open **https://render.com/deploy?repo=https://github.com/aavaahanan404-coder/vortex** and sign in (a free Render account is enough; GitHub sign-in works).
+2. Press **Apply / Deploy**. The first build takes about 10 minutes. The demo data is prepared during the build, so later starts are quick.
+3. Render shows the address, like `https://vortex-xxxx.onrender.com`. Open **`<address>/demo`**: that is the Demo hub. Use "Download all sample files (zip)" there for the files to upload.
+
+Things to know:
+- **Anyone with the address can sign in as admin or reviewer** (the demo tokens are shown on the hub) and change the rules. That is acceptable only because all data is sample data; the site returns to its starting state whenever it restarts. Do not upload real documents to it.
+- On the free plan the site **sleeps after about 15 minutes idle**; the next visitor waits a few minutes for it to wake. Wake it before presenting.
+- The free plan has 512 MB of memory. If Render reports the service was killed for memory (reading scanned pages uses the most), change `plan: free` to `plan: starter` in `render.yaml` (a paid plan) and redeploy.
+- The image has not been built on the development computer (no Docker there); its parts were tested separately: the pinned dependencies in a clean environment, seeding, start-up from baked data, the zip and hub, and the web-server command. If the first Render build fails, send me the build log.
+
 ## If something goes wrong
 - Page says it cannot reach the server: the API window is still seeding or was closed; wait for the token list.
 - With `-Dev`, sign-in does nothing the first time: the dev server was compiling; try again (the production start does not do this).

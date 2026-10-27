@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+data
+data_demo
+corpus_test_v2
+tests
+reports
+frontend/node_modules
+frontend/.next
+frontend/*.tsbuildinfo

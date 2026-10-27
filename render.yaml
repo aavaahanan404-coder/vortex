@@ -1,0 +1,8 @@
+# Render blueprint: one Docker web service. Deploy: https://render.com/deploy?repo=https://github.com/aavaahanan404-coder/vortex
+services:
+  - type: web
+    name: vortex
+    runtime: docker
+    plan: free              # 512 MB; if the service is killed for memory (reading scans uses the most), change to "starter"
+    healthCheckPath: /backend/health
+    autoDeploy: true
